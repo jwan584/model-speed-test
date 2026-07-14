@@ -4,9 +4,10 @@ Reproducible harnesses for measuring model performance in coding-agent workflows
 
 ## SWE-bench
 
-The [`swe-bench/`](swe-bench/) directory contains the native Codex SWE-bench
-Verified harness, exact provider-lifecycle timing instrumentation, pinned Python
-dependencies, tests, and operating documentation.
+The [`swe-bench/`](swe-bench/) directory contains native Codex and Claude Code
+SWE-bench Verified harnesses, per-request model timing, overlap-safe tool and
+wall accounting, pinned Python dependencies, tests, and operating
+documentation.
 
 Clone with submodules so the legacy mini-swe-agent workflows are available:
 

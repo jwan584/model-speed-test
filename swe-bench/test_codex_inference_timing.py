@@ -38,6 +38,7 @@ class CodexInferenceTimingTests(unittest.TestCase):
                 "model": "gpt-test",
                 "warmup": False,
                 "provider_start_kind": "response.created",
+                "request_sent_unix_ns": 1_500_000_000,
                 "provider_event_started_unix_ns": 2_000_000_000,
                 "completed_unix_ns": 3_000_000_000,
                 "output_tokens": 45,
@@ -69,6 +70,18 @@ class CodexInferenceTimingTests(unittest.TestCase):
         self.assertEqual(calls[0]["provider_window_inference_seconds"], 1.0)
         self.assertEqual(calls[0]["tool_overlap_seconds"], 1.0)
         self.assertEqual(summary["provider_window_output_tps"], 45.0)
+        self.assertEqual(summary["primary_request_seconds_sum"], 1.5)
+        self.assertEqual(summary["primary_request_output_tps"], 30.0)
+        self.assertEqual(
+            summary["request_active_wall_partition"],
+            {
+                "llm_request_only_seconds": 0.5,
+                "tool_only_seconds": 0.0,
+                "llm_request_tool_overlap_seconds": 1.0,
+                "orchestration_residual_seconds": 1.5,
+                "reconciliation_error_seconds": 0.0,
+            },
+        )
         self.assertEqual(summary["coverage"], "complete")
         self.assertEqual(summary["total_tool_seconds"], 1.0)
         self.assertEqual(len(tools), 1)
@@ -79,6 +92,7 @@ class CodexInferenceTimingTests(unittest.TestCase):
                 "model": "gpt-test",
                 "warmup": True,
                 "provider_start_kind": "response.created",
+                "request_sent_unix_ns": 900_000_000,
                 "provider_event_started_unix_ns": 1_000_000_000,
                 "completed_unix_ns": 1_100_000_000,
                 "output_tokens": 0,
@@ -87,6 +101,7 @@ class CodexInferenceTimingTests(unittest.TestCase):
                 "model": "codex-auto-review",
                 "warmup": False,
                 "provider_start_kind": "response.created",
+                "request_sent_unix_ns": 1_500_000_000,
                 "provider_event_started_unix_ns": 2_000_000_000,
                 "completed_unix_ns": 3_000_000_000,
                 "output_tokens": 20,
@@ -95,6 +110,7 @@ class CodexInferenceTimingTests(unittest.TestCase):
                 "model": "gpt-test",
                 "warmup": False,
                 "provider_start_kind": "response.created",
+                "request_sent_unix_ns": 3_500_000_000,
                 "provider_event_started_unix_ns": 4_000_000_000,
                 "completed_unix_ns": 6_000_000_000,
                 "output_tokens": 200,

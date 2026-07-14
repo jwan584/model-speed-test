@@ -71,6 +71,47 @@ of target-model output tokens to summed `response.created` →
 `response.completed` windows. Tool-only gaps are excluded by construction;
 concurrent tool time is reported separately and never subtracted.
 
+## Native Claude Code request and tool timing
+
+`claude_swebench_problem1.py` runs the same sorted SWE-bench Verified problem
+selection, worktree preparation, container bridge, patch capture, and optional
+official evaluation through Claude Code. For example, after the persistent
+runner environment has been prepared:
+
+```bash
+~/.swe-bench-runtime/runner-venv/bin/python \
+  ./claude_swebench_problem1.py \
+  --index 1 \
+  --model claude-sonnet-5 \
+  --effort high \
+  --require-complete-inference-timing \
+  --skip-evaluation
+```
+
+The adapter starts a loopback-only OTLP/HTTP receiver and enables Claude
+Code's official enhanced telemetry for the non-interactive session. One
+`claude_code.llm_request` span is captured per model request and one
+`claude_code.tool` span per tool invocation. Raw telemetry is never persisted;
+only a strict whitelist of model, duration, token, retry, query-source, and
+tool-name fields is written. Prompt and tool-content telemetry flags are
+explicitly removed from the child environment.
+
+`inference_calls.jsonl` contains every target and auxiliary model request with
+its client-observed start/end window. `tool_intervals.jsonl` contains the tool
+spans, and `otel_trace_diagnostics.json` records collector coverage. The
+canonical `run_metadata.json` reports:
+
+- target-model request-duration sum and ratio-of-sums output TPS
+- target and all-model request-window unions
+- tool-window union and request/tool concurrency
+- an additive wall partition: request-only, tool-only, overlap, and residual
+- the terminal CLI `duration_api_ms` value as a diagnostic only
+
+These spans measure client/API request-active time including latency and
+retries, not server-engine GPU decode time. If request spans are unavailable,
+the adapter falls back to the older stream/terminal-result accounting, marks
+coverage partial, and fails `--require-complete-inference-timing`.
+
 ## One-command Codex ultrafast run: problem 1
 
 From this directory, run:

@@ -237,7 +237,10 @@ def summarize_lifecycle(
     calls = []
     all_model_windows = []
     target_windows = []
+    all_model_request_windows = []
+    target_request_windows = []
     for trace in traces:
+        request_start_ns = exact_integer(trace.get("request_sent_unix_ns"))
         start_ns = exact_integer(trace.get("provider_event_started_unix_ns"))
         end_ns = exact_integer(trace.get("completed_unix_ns"))
         output_tokens = integer(trace.get("output_tokens"))
@@ -247,9 +250,27 @@ def summarize_lifecycle(
             else None
         )
         valid_window = window_ns is not None and window_ns > 0
+        request_window_ns = (
+            end_ns - request_start_ns
+            if request_start_ns is not None
+            and end_ns is not None
+            and end_ns > request_start_ns
+            else None
+        )
+        valid_request_window = (
+            request_window_ns is not None and request_window_ns > 0
+        )
         overlap_ns = (
             min(window_ns, interval_overlap_ns((start_ns, end_ns), tool_union))
             if valid_window
+            else None
+        )
+        request_overlap_ns = (
+            min(
+                request_window_ns,
+                interval_overlap_ns((request_start_ns, end_ns), tool_union),
+            )
+            if valid_request_window
             else None
         )
         exclusion_reason = None
@@ -275,19 +296,43 @@ def summarize_lifecycle(
             "tool_overlap_seconds": (
                 overlap_ns / 1_000_000_000 if overlap_ns is not None else None
             ),
+            "request_active_seconds": (
+                request_window_ns / 1_000_000_000
+                if request_window_ns is not None
+                else None
+            ),
+            "request_active_output_tps": (
+                output_tokens / (request_window_ns / 1_000_000_000)
+                if output_tokens is not None and valid_request_window
+                else None
+            ),
+            "request_active_tool_overlap_seconds": (
+                request_overlap_ns / 1_000_000_000
+                if request_overlap_ns is not None
+                else None
+            ),
             "included_in_primary": exclusion_reason is None,
             "primary_exclusion_reason": exclusion_reason,
         }
         calls.append(call)
         if valid_window and trace.get("warmup") is not True:
             all_model_windows.append((start_ns, end_ns))
+        if valid_request_window and trace.get("warmup") is not True:
+            all_model_request_windows.append((request_start_ns, end_ns))
         if exclusion_reason is None:
             target_windows.append((start_ns, end_ns))
+            if valid_request_window:
+                target_request_windows.append((request_start_ns, end_ns))
 
     eligible = [call for call in calls if call["included_in_primary"]]
     output_tokens = sum(int(call["output_tokens"]) for call in eligible)
     inference_seconds = sum(
         float(call["provider_window_inference_seconds"]) for call in eligible
+    )
+    request_active_seconds = sum(
+        float(call["request_active_seconds"])
+        for call in eligible
+        if call.get("request_active_seconds") is not None
     )
     target_tool_overlap_seconds = sum(
         float(call["tool_overlap_seconds"]) for call in eligible
@@ -321,10 +366,16 @@ def summarize_lifecycle(
         coverage_reasons.append("output_tokens_not_reconciled")
     if fallback_count:
         coverage_reasons.append("request_sent_boundary_fallback")
+    if any(call.get("request_active_seconds") is None for call in eligible):
+        coverage_reasons.append("missing_request_sent_boundary")
 
     all_model_union = union_intervals(all_model_windows)
     target_union = union_intervals(target_windows)
+    all_model_request_union = union_intervals(all_model_request_windows)
+    target_request_union = union_intervals(target_request_windows)
     all_model_union_ns = interval_duration_ns(all_model_union)
+    all_model_request_union_ns = interval_duration_ns(all_model_request_union)
+    target_request_union_ns = interval_duration_ns(target_request_union)
     tool_union_ns = interval_duration_ns(tool_union)
     target_tool_concurrency_ns = sum(
         interval_overlap_ns(window, tool_union) for window in target_union
@@ -332,9 +383,35 @@ def summarize_lifecycle(
     all_model_tool_concurrency_ns = sum(
         interval_overlap_ns(window, tool_union) for window in all_model_union
     )
+    target_request_tool_concurrency_ns = sum(
+        interval_overlap_ns(window, tool_union)
+        for window in target_request_union
+    )
+    all_model_request_tool_concurrency_ns = sum(
+        interval_overlap_ns(window, tool_union)
+        for window in all_model_request_union
+    )
     wall_ns = max(0, run_end_ns - run_start_ns)
     accounted_union_ns = interval_duration_ns(all_model_union + tool_union)
     unattributed_ns = max(0, wall_ns - accounted_union_ns)
+    request_accounted_union_ns = interval_duration_ns(
+        all_model_request_union + tool_union
+    )
+    request_unattributed_ns = max(0, wall_ns - request_accounted_union_ns)
+    request_only_ns = max(
+        0,
+        all_model_request_union_ns - all_model_request_tool_concurrency_ns,
+    )
+    tool_only_ns = max(
+        0,
+        tool_union_ns - all_model_request_tool_concurrency_ns,
+    )
+    request_partition_error_ns = wall_ns - (
+        request_only_ns
+        + tool_only_ns
+        + all_model_request_tool_concurrency_ns
+        + request_unattributed_ns
+    )
 
     summary = {
         "schema_version": "codex-swebench-inference-accounting-1",
@@ -352,6 +429,37 @@ def summarize_lifecycle(
         "provider_window_output_tps": (
             output_tokens / inference_seconds if inference_seconds else None
         ),
+        "primary_request_seconds_sum": request_active_seconds,
+        "primary_request_output_tps": (
+            output_tokens / request_active_seconds
+            if request_active_seconds
+            else None
+        ),
+        "primary_request_union_seconds": (
+            target_request_union_ns / 1_000_000_000
+        ),
+        "all_model_request_union_seconds": (
+            all_model_request_union_ns / 1_000_000_000
+        ),
+        "primary_request_tool_concurrency_seconds": (
+            target_request_tool_concurrency_ns / 1_000_000_000
+        ),
+        "all_model_request_tool_concurrency_seconds": (
+            all_model_request_tool_concurrency_ns / 1_000_000_000
+        ),
+        "request_active_wall_partition": {
+            "llm_request_only_seconds": request_only_ns / 1_000_000_000,
+            "tool_only_seconds": tool_only_ns / 1_000_000_000,
+            "llm_request_tool_overlap_seconds": (
+                all_model_request_tool_concurrency_ns / 1_000_000_000
+            ),
+            "orchestration_residual_seconds": (
+                request_unattributed_ns / 1_000_000_000
+            ),
+            "reconciliation_error_seconds": (
+                request_partition_error_ns / 1_000_000_000
+            ),
+        },
         "target_tool_overlap_seconds_per_call_sum": target_tool_overlap_seconds,
         "target_inference_tool_concurrency_seconds": (
             target_tool_concurrency_ns / 1_000_000_000
