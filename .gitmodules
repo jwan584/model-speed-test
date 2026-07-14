@@ -1,0 +1,3 @@
+[submodule "swe-bench/mini-swe-agent"]
+	path = swe-bench/mini-swe-agent
+	url = https://github.com/SWE-agent/mini-swe-agent.git

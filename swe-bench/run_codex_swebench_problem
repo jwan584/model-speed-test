@@ -1,0 +1,335 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+STATE_ROOT=${SWE_BENCH_STATE_ROOT:-$HOME/.swe-bench-runtime}
+COLIMA_HOME="$STATE_ROOT/colima-home"
+DOCKER_CONFIG_ROOT="$STATE_ROOT/docker-config"
+HF_CACHE_ROOT="$STATE_ROOT/hf-cache"
+PIP_CACHE_ROOT="$STATE_ROOT/pip-cache"
+WORKTREE_ROOT="$STATE_ROOT/worktrees"
+RUNNER_VENV=${SWE_BENCH_RUNNER_VENV:-$STATE_ROOT/runner-venv}
+EVAL_VENV=${SWE_BENCH_EVAL_VENV:-$STATE_ROOT/eval-venv}
+RUNNER_REQUIREMENTS="$ROOT/swebench_runner_requirements.txt"
+EVAL_REQUIREMENTS="$ROOT/swebench_eval_requirements.txt"
+DEFAULT_CODEX_BIN="$ROOT/../live-code-bench/LiveCodeBench/.codex-instrumented/codex-v0.144.3"
+BOOTSTRAP_HEARTBEAT_PID=""
+VENV_BUILD_TMP=""
+
+usage() {
+  cat <<'EOF'
+Usage: bash ./run_codex_swebench_problem QUESTION_NUMBER [launcher options] [harness options]
+       bash ./run_codex_swebench_problem --question QUESTION_NUMBER [launcher options] [harness options]
+
+QUESTION_NUMBER is one-based after sorting SWE-bench Verified/test instance IDs.
+Both `1` and `Q1` forms are accepted.
+
+Launcher options:
+  --question QUESTION_NUMBER  Problem number; equivalent to the positional form
+  --model MODEL               Model name
+  --reasoning EFFORT          Reasoning effort
+  --service-tier TIER         Service tier; `default` omits an explicit tier
+
+Environment overrides:
+  CODEX_SWEBENCH_QUESTION  Problem number when no positional/flag value is given
+  CODEX_INSTRUMENTED_BIN   Instrumented Codex executable
+  CODEX_SWEBENCH_MODEL     Model (default: gpt-5.6-sol-ultrafast)
+  CODEX_SWEBENCH_REASONING Reasoning effort (default: high)
+  CODEX_SWEBENCH_SERVICE_TIER Service tier (default: default/omitted)
+  SWE_BENCH_STATE_ROOT     Persistent machine-local state (default: ~/.swe-bench-runtime)
+  SWE_BENCH_MACHINE_ID     Result-directory name (default: sanitized local hostname)
+
+Examples:
+  bash ./run_codex_swebench_problem Q1 --skip-evaluation
+  bash ./run_codex_swebench_problem Q2 --model gpt-5.6-sol --skip-evaluation
+  bash ./run_codex_swebench_problem --question Q5 --model gpt-5.6-sol-ultrafast --skip-evaluation
+  bash ./run_codex_swebench_problem Q27 --skip-evaluation
+  bash ./run_codex_swebench_problem Q5 --prepare-only
+EOF
+}
+
+cleanup_bootstrap() {
+  if [[ -n "$BOOTSTRAP_HEARTBEAT_PID" ]]; then
+    kill "$BOOTSTRAP_HEARTBEAT_PID" >/dev/null 2>&1 || true
+    wait "$BOOTSTRAP_HEARTBEAT_PID" >/dev/null 2>&1 || true
+    BOOTSTRAP_HEARTBEAT_PID=""
+  fi
+  if [[ -n "$VENV_BUILD_TMP" \
+        && "$VENV_BUILD_TMP" == "$STATE_ROOT"/build/* ]]; then
+    rm -rf -- "$VENV_BUILD_TMP"
+    VENV_BUILD_TMP=""
+  fi
+}
+
+trap cleanup_bootstrap EXIT
+trap 'cleanup_bootstrap; exit 130' INT TERM
+
+runtime_fingerprint() {
+  local requirements=$1
+  {
+    shasum -a 256 "$requirements"
+    python3 -VV
+    uname -m
+  } | shasum -a 256 | awk '{print $1}'
+}
+
+ensure_local_venv() {
+  local label=$1
+  local requirements=$2
+  local destination=$3
+  local validation_import=$4
+  local fingerprint
+  fingerprint=$(runtime_fingerprint "$requirements")
+  local marker="$destination/.swe-bench-runtime-fingerprint"
+  if [[ -x "$destination/bin/python" \
+        && -f "$marker" \
+        && "$(<"$marker")" == "$fingerprint" ]]; then
+    echo "[bootstrap] Reusing persistent $label: $destination"
+    return
+  fi
+
+  echo "[bootstrap] Installing pinned $label outside iCloud"
+  mkdir -p "$STATE_ROOT/build" "$PIP_CACHE_ROOT"
+  VENV_BUILD_TMP=$(mktemp -d "$STATE_ROOT/build/$label.XXXXXX")
+  local candidate="$VENV_BUILD_TMP/venv"
+  python3 -m venv "$candidate"
+  local started=$SECONDS
+  (
+    while sleep 30; do
+      echo "[bootstrap] Still installing $label: $((SECONDS - started))s elapsed"
+    done
+  ) &
+  BOOTSTRAP_HEARTBEAT_PID=$!
+  if ! PIP_CACHE_DIR="$PIP_CACHE_ROOT" \
+      "$candidate/bin/python" -m pip install \
+      --disable-pip-version-check \
+      --requirement "$requirements"; then
+    echo "BLOCKER: failed to install $label" >&2
+    return 1
+  fi
+  kill "$BOOTSTRAP_HEARTBEAT_PID" >/dev/null 2>&1 || true
+  wait "$BOOTSTRAP_HEARTBEAT_PID" >/dev/null 2>&1 || true
+  BOOTSTRAP_HEARTBEAT_PID=""
+  HF_HOME="$HF_CACHE_ROOT" PYTHONDONTWRITEBYTECODE=1 \
+    "$candidate/bin/python" -c "$validation_import"
+  printf '%s\n' "$fingerprint" > \
+    "$candidate/.swe-bench-runtime-fingerprint"
+  rm -rf -- "$destination"
+  mv "$candidate" "$destination"
+  rmdir "$VENV_BUILD_TMP"
+  VENV_BUILD_TMP=""
+  echo "[bootstrap] $label ready in $((SECONDS - started))s"
+}
+
+CODEX_BIN=${CODEX_INSTRUMENTED_BIN:-$DEFAULT_CODEX_BIN}
+MODEL=${CODEX_SWEBENCH_MODEL:-gpt-5.6-sol-ultrafast}
+REASONING=${CODEX_SWEBENCH_REASONING:-high}
+SERVICE_TIER=${CODEX_SWEBENCH_SERVICE_TIER:-default}
+QUESTION_REF=${CODEX_SWEBENCH_QUESTION:-}
+QUESTION_CLI_SET=0
+
+SKIP_EVALUATION=0
+PREPARE_ONLY=0
+EVALUATE_EXISTING=0
+FORWARD_ARGS=()
+while [[ $# -gt 0 ]]; do
+  argument=$1
+  case "$argument" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --question|--model|--reasoning|--service-tier)
+      if [[ $# -lt 2 || -z "$2" ]]; then
+        echo "BLOCKER: $argument requires a value" >&2
+        usage >&2
+        exit 2
+      fi
+      case "$argument" in
+        --question)
+          if [[ $QUESTION_CLI_SET -eq 1 ]]; then
+            echo "BLOCKER: question was provided more than once" >&2
+            usage >&2
+            exit 2
+          fi
+          QUESTION_REF=$2
+          QUESTION_CLI_SET=1
+          ;;
+        --model) MODEL=$2 ;;
+        --reasoning) REASONING=$2 ;;
+        --service-tier) SERVICE_TIER=$2 ;;
+      esac
+      shift 2
+      ;;
+    --question=*)
+      if [[ $QUESTION_CLI_SET -eq 1 ]]; then
+        echo "BLOCKER: question was provided more than once" >&2
+        usage >&2
+        exit 2
+      fi
+      QUESTION_REF=${argument#*=}
+      QUESTION_CLI_SET=1
+      shift
+      ;;
+    --model=*) MODEL=${argument#*=}; shift ;;
+    --reasoning=*) REASONING=${argument#*=}; shift ;;
+    --service-tier=*) SERVICE_TIER=${argument#*=}; shift ;;
+    --skip-evaluation)
+      SKIP_EVALUATION=1
+      FORWARD_ARGS+=("$argument")
+      shift
+      ;;
+    --prepare-only)
+      PREPARE_ONLY=1
+      FORWARD_ARGS+=("$argument")
+      shift
+      ;;
+    --output|--evaluation-timeout)
+      if [[ $# -lt 2 || -z "$2" ]]; then
+        echo "BLOCKER: $argument requires a value" >&2
+        exit 2
+      fi
+      FORWARD_ARGS+=("$argument" "$2")
+      shift 2
+      ;;
+    --evaluate-existing)
+      if [[ $# -lt 2 || -z "$2" ]]; then
+        echo "BLOCKER: $argument requires a value" >&2
+        exit 2
+      fi
+      EVALUATE_EXISTING=1
+      FORWARD_ARGS+=("$argument" "$2")
+      shift 2
+      ;;
+    --output=*|--evaluation-timeout=*)
+      FORWARD_ARGS+=("$argument")
+      shift
+      ;;
+    --evaluate-existing=*)
+      EVALUATE_EXISTING=1
+      FORWARD_ARGS+=("$argument")
+      shift
+      ;;
+    [Qq][1-9]*|[1-9]*)
+      if [[ $QUESTION_CLI_SET -eq 1 ]]; then
+        echo "BLOCKER: question was provided more than once" >&2
+        usage >&2
+        exit 2
+      fi
+      QUESTION_REF=$argument
+      QUESTION_CLI_SET=1
+      shift
+      ;;
+    *)
+      FORWARD_ARGS+=("$argument")
+      shift
+      ;;
+  esac
+done
+
+if [[ -z "$QUESTION_REF" ]]; then
+  echo "BLOCKER: provide QUESTION_NUMBER positionally, with --question, or with CODEX_SWEBENCH_QUESTION" >&2
+  usage >&2
+  exit 2
+fi
+if [[ ! "$QUESTION_REF" =~ ^[Qq]?([1-9][0-9]*)$ ]]; then
+  echo "BLOCKER: QUESTION_NUMBER must be a positive integer; received: $QUESTION_REF" >&2
+  usage >&2
+  exit 2
+fi
+if [[ -z "$MODEL" || -z "$REASONING" || -z "$SERVICE_TIER" ]]; then
+  echo "BLOCKER: model, reasoning, and service tier must be non-empty" >&2
+  usage >&2
+  exit 2
+fi
+
+QUESTION_NUMBER=${BASH_REMATCH[1]}
+DATASET_INDEX=$((QUESTION_NUMBER - 1))
+NEEDS_EVALUATOR=1
+if [[ $EVALUATE_EXISTING -eq 0 \
+      && ( $SKIP_EVALUATION -eq 1 || $PREPARE_ONLY -eq 1 ) ]]; then
+  NEEDS_EVALUATOR=0
+fi
+
+if [[ ! -f "$RUNNER_REQUIREMENTS" || ! -f "$EVAL_REQUIREMENTS" ]]; then
+  echo "BLOCKER: pinned SWE-bench requirement files are missing" >&2
+  exit 2
+fi
+if [[ ! -x "$CODEX_BIN" ]]; then
+  echo "BLOCKER: instrumented Codex binary is missing: $CODEX_BIN" >&2
+  echo "Build it once in ../live-code-bench/LiveCodeBench with ./build_instrumented_codex" >&2
+  exit 2
+fi
+
+if [[ -n ${SWE_BENCH_MACHINE_ID:-} ]]; then
+  RAW_MACHINE_ID=$SWE_BENCH_MACHINE_ID
+elif command -v scutil >/dev/null 2>&1; then
+  RAW_MACHINE_ID=$(scutil --get LocalHostName 2>/dev/null || hostname -s)
+else
+  RAW_MACHINE_ID=$(hostname -s)
+fi
+MACHINE_ID=$(printf '%s' "$RAW_MACHINE_ID" \
+  | tr '[:upper:]' '[:lower:]' \
+  | sed -E 's/[^a-z0-9_.-]+/-/g; s/^-+|-+$//g')
+if [[ -z "$MACHINE_ID" ]]; then
+  echo "BLOCKER: could not derive a safe machine identifier" >&2
+  exit 2
+fi
+
+mkdir -p \
+  "$STATE_ROOT" \
+  "$COLIMA_HOME" \
+  "$DOCKER_CONFIG_ROOT" \
+  "$HF_CACHE_ROOT" \
+  "$PIP_CACHE_ROOT" \
+  "$WORKTREE_ROOT"
+
+ensure_local_venv \
+  "runner runtime" \
+  "$RUNNER_REQUIREMENTS" \
+  "$RUNNER_VENV" \
+  'import datasets, pandas, pyarrow'
+if [[ $NEEDS_EVALUATOR -eq 1 ]]; then
+  ensure_local_venv \
+    "official evaluator" \
+    "$EVAL_REQUIREMENTS" \
+    "$EVAL_VENV" \
+    'import datasets; import swebench.harness.run_evaluation'
+else
+  echo "[bootstrap] Evaluator skipped for this performance-only run"
+fi
+
+PYTHON="$RUNNER_VENV/bin/python"
+export SWE_BENCH_MINI_PYTHON="$PYTHON"
+export SWE_BENCH_EVAL_PYTHON="$EVAL_VENV/bin/python"
+export SWE_BENCH_MACHINE_ID="$MACHINE_ID"
+export SWE_BENCH_STATE_ROOT="$STATE_ROOT"
+export PYTHONDONTWRITEBYTECODE=1
+export DOCKER_HOST="unix://$COLIMA_HOME/.colima/default/docker.sock"
+export DOCKER_CONFIG="$DOCKER_CONFIG_ROOT"
+export HF_HOME="$HF_CACHE_ROOT"
+
+if [[ ${SWE_BENCH_STAGE_ONLY:-0} == 1 ]]; then
+  echo "[bootstrap] Persistent runtime ready for machine: $MACHINE_ID"
+  echo "[selection] question=Q$QUESTION_NUMBER model=$MODEL reasoning=$REASONING service_tier=$SERVICE_TIER"
+  exit 0
+fi
+
+if ! HOME="$COLIMA_HOME" colima status >/dev/null 2>&1; then
+  HOME="$COLIMA_HOME" colima start \
+    --cpus 4 \
+    --memory 8 \
+    --runtime docker \
+    --vm-type qemu \
+    --mount-type 9p
+fi
+
+exec "$PYTHON" "$ROOT/codex_swebench_problem1.py" \
+  --index "$DATASET_INDEX" \
+  --codex-bin "$CODEX_BIN" \
+  --require-inference-timing \
+  --model "$MODEL" \
+  --reasoning "$REASONING" \
+  --service-tier "$SERVICE_TIER" \
+  --worktree-root "$WORKTREE_ROOT" \
+  "${FORWARD_ARGS[@]}"

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+exec bash "$ROOT/run_codex_swebench_problem" \
+  --question Q2 \
+  --model gpt-5.6-sol \
+  --reasoning high \
+  --service-tier default \
+  --skip-evaluation \
+  "$@"

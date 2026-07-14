@@ -1,0 +1,14 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.venv*/
+.pytest_cache/
+
+# Generated benchmark state and results
+swe-bench/logs/
+swe-bench/runs/
+
+# Local credentials and overrides
+.env
+.env.*
+!.env.example
