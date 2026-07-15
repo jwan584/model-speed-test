@@ -64,12 +64,37 @@ bash ./run_codex_swebench_problem Q1 \
 
 Every internal model response prints an `inference_micro_session` heartbeat,
 and a passive `running` heartbeat is printed every 30 seconds during quiet
-periods.
+periods. The adapter also enforces a documented 3,600-second solve bound
+(`--solve-timeout` can change it), records `solve_timed_out`, and lets the
+normal `finally` cleanup remove its container and worktree. Timed-out solves
+are explicit failures and never enter strict TPS aggregates.
+
+Native Codex batches perform an authentication preflight before creating any
+question artifacts. In managed environments that cannot read normal
+`~/.codex`, use a dedicated ignored home and authenticate it once:
+
+```bash
+CODEX_HOME="../../LiveCodeBench/.codex-benchmark-home" codex login --device-auth
+```
+
+Export that same absolute `CODEX_HOME` for the batch. The directory is ignored
+by Git and must never be committed or copied into result artifacts.
+
+If Codex itself is launched inside a managed macOS sandbox, nested
+`sandbox-exec` may reject every repository operation. After a setup smoke
+proves that exact failure, pass `--codex-sandbox danger-full-access`; use it
+only with the disposable task worktree and Docker command bridge. The selected
+mode is recorded in run and batch metadata. A cohort with sandbox-rejected
+reads/writes is invalid, even when its inference timing is complete.
+
 The run directory records `inference_calls.jsonl`, `tool_intervals.jsonl`, and
-an `inference_timing` object in `run_metadata.json`. Inference TPS is the ratio
-of target-model output tokens to summed `response.created` →
-`response.completed` windows. Tool-only gaps are excluded by construction;
-concurrent tool time is reported separately and never subtracted.
+an `inference_timing` object in `run_metadata.json`. The cross-provider
+headline is `end_to_end_billed_tps`: provider-billed output tokens divided by
+summed monotonic request-dispatch → terminal-response durations for successful,
+reconciled target-model calls. `response.created` → `response.completed`
+remains a secondary Codex diagnostic. Tool-only gaps are excluded by
+construction; concurrent tool time is reported separately and never
+subtracted from a request.
 
 ## Native Claude Code request and tool timing
 
@@ -101,16 +126,69 @@ its client-observed start/end window. `tool_intervals.jsonl` contains the tool
 spans, and `otel_trace_diagnostics.json` records collector coverage. The
 canonical `run_metadata.json` reports:
 
-- target-model request-duration sum and ratio-of-sums output TPS
+- target-model successful request-duration sum and ratio-of-sums
+  `end_to_end_billed_tps`
+- explicit excluded-call reasons and final-usage token reconciliation
+- provider-reported median TTFT as a diagnostic, never a decode boundary
 - target and all-model request-window unions
 - tool-window union and request/tool concurrency
 - an additive wall partition: request-only, tool-only, overlap, and residual
 - the terminal CLI `duration_api_ms` value as a diagnostic only
 
-These spans measure client/API request-active time including latency and
-retries, not server-engine GPU decode time. If request spans are unavailable,
+These spans measure client/API request-active time including latency, not
+server-engine GPU decode time. Failed attempts and retry backoff are excluded
+from the successful-call TPS denominator and reported separately. If request spans are unavailable,
 the adapter falls back to the older stream/terminal-result accounting, marks
 coverage partial, and fails `--require-complete-inference-timing`.
+
+### Claude Fable 5 xhigh Q1-Q10 batch
+
+Run the first ten lexicographically sorted Verified/test instances
+sequentially with strict timing and without the official evaluator:
+
+```bash
+bash ./run_claude_problems_1_10_fable5_xhigh.sh
+```
+
+The launcher reuses the persistent Colima VM, Docker configuration, Hugging
+Face and pip caches, runner virtualenv, and temporary-worktree root under
+`~/.swe-bench-runtime`. It pre-pulls each image before that problem's solve
+timer and passes `--model claude-fable-5`, `--effort xhigh`,
+`--require-complete-inference-timing`, `--skip-evaluation`, and `--skip-pull`
+to the single-problem adapter. Solves are sequential, quiet child processes
+produce a passive heartbeat, and the batch uses a documented 3,600-second
+per-attempt bound. A timeout is an explicit excluded attempt, not evidence for
+inventing token or timing totals.
+
+Compact batch artifacts are written under hostname-separated
+`runs/<machine>/` directories. `batch_metadata.json` is the canonical
+manifest, `batch.csv` contains one row per question, and `batch.md` is the
+readable summary. Raw per-problem artifacts remain in their subdirectories.
+Claude Code's OTel surface can omit its first target request and auxiliary
+requests even though terminal usage bills them. Therefore the comparable
+Claude headline `end_to_end_billed_tps` uses the successful terminal result's
+authoritative `modelUsage` output-token total across **all models** divided by
+terminal `duration_api_ms`. Batch TPS is the ratio of those terminal sums,
+never an average of per-question rates. It measures client/API request-active
+throughput, not server-engine decode throughput. Target-Fable OTel TPS,
+provider-reported TTFT, captured-call counts, and the exact OTel-versus-terminal
+token gap remain explicitly labeled diagnostics and never replace the
+all-model terminal headline.
+
+Runs are checkpointed after every question. Resume a paused batch without
+rerunning completed questions by passing its artifact root and next question:
+
+```bash
+bash ./run_claude_problems_1_10_fable5_xhigh.sh \
+  --resume-output runs/<machine>/<batch> \
+  --start-question 2
+```
+
+Validate selection and command construction without model calls or Docker:
+
+```bash
+bash ./run_claude_problems_1_10_fable5_xhigh.sh --dry-run
+```
 
 ## One-command Codex ultrafast run: problem 1
 
@@ -290,8 +368,8 @@ streamed there. Do not interrupt the foreground harness or remove its container
 while a child process may still be running. See the runbook for diagnostics and
 cleanup.
 
-Do not wrap the harness in an arbitrary wall-clock timeout. SWE-bench tasks can
-run substantially longer than prior examples, especially under QEMU. Once the
-preflight checks pass, wait for the harness's own terminal result unless there
-is specific evidence that the Docker daemon, container, or model endpoint has
-failed.
+Do not wrap the harness in an ad hoc timeout derived from a prior run.
+SWE-bench tasks can run substantially longer than prior examples, especially
+under QEMU. Use the harness's documented per-attempt bound and heartbeat; a
+bound hit is persisted as an excluded failure with cleanup rather than being
+silently treated as a completed measurement.

@@ -12,10 +12,16 @@ diagnostic fallbacks only.
 from __future__ import annotations
 
 import json
+import statistics
 from pathlib import Path
 from typing import Any
 
 TOOL_EVENT_TYPES = {"tool_use", "tool_result"}
+INCOMPLETE_STOP_REASONS = {
+    "max_tokens",
+    "model_context_window_exceeded",
+    "refusal",
+}
 
 
 def numeric(value: Any) -> float | None:
@@ -170,9 +176,32 @@ def build_otel_timing_records(
                 "gen_ai.request.model"
             )
             output_tokens = integer(attributes.get("output_tokens"))
+            reported_duration_ms = numeric(attributes.get("duration_ms"))
+            request_seconds = (
+                reported_duration_ms / 1000
+                if reported_duration_ms is not None and reported_duration_ms > 0
+                else None
+            )
+            success = attributes.get("success")
+            success_is_true = success is True or (
+                isinstance(success, str) and success.lower() == "true"
+            )
+            stop_reason = attributes.get("stop_reason")
+            exclusion_reason = None
+            if model in target_models:
+                if not success_is_true:
+                    exclusion_reason = "request_not_successful"
+                elif request_seconds is None:
+                    exclusion_reason = "missing_monotonic_request_duration"
+                elif output_tokens is None:
+                    exclusion_reason = "missing_output_tokens"
+                elif output_tokens < 0:
+                    exclusion_reason = "invalid_output_tokens"
+                elif stop_reason in INCOMPLETE_STOP_REASONS:
+                    exclusion_reason = f"incomplete_stop_reason:{stop_reason}"
             calls.append(
                 {
-                    "schema_version": "claude-swebench-otel-llm-request-1",
+                    "schema_version": "claude-swebench-otel-llm-request-2",
                     "span_id": span.get("spanId") or span.get("span_id"),
                     "parent_span_id": span.get("parentSpanId")
                     or span.get("parent_span_id"),
@@ -182,8 +211,9 @@ def build_otel_timing_records(
                     "is_target_model": model in target_models,
                     "start_unix_ns": clipped_start,
                     "end_unix_ns": clipped_end,
-                    "request_seconds": duration_seconds,
-                    "reported_duration_ms": numeric(attributes.get("duration_ms")),
+                    "span_wall_seconds": duration_seconds,
+                    "request_seconds": request_seconds,
+                    "reported_duration_ms": reported_duration_ms,
                     "ttft_ms": numeric(attributes.get("ttft_ms")),
                     "input_tokens": integer(attributes.get("input_tokens")),
                     "output_tokens": output_tokens,
@@ -193,9 +223,9 @@ def build_otel_timing_records(
                     "cache_creation_input_tokens": integer(
                         attributes.get("cache_creation_tokens")
                     ),
-                    "request_output_tps": (
-                        output_tokens / duration_seconds
-                        if output_tokens is not None and duration_seconds > 0
+                    "end_to_end_billed_tps": (
+                        output_tokens / request_seconds
+                        if output_tokens is not None and request_seconds
                         else None
                     ),
                     "query_source": attributes.get("query_source"),
@@ -205,10 +235,19 @@ def build_otel_timing_records(
                     "speed": attributes.get("speed"),
                     "effort": attributes.get("effort"),
                     "attempt": integer(attributes.get("attempt")),
-                    "success": attributes.get("success"),
+                    "success": success,
                     "has_tool_call": attributes.get("response.has_tool_call"),
-                    "stop_reason": attributes.get("stop_reason"),
+                    "stop_reason": stop_reason,
                     "status_code": status.get("code"),
+                    "outcome": "completed" if success_is_true else "failed",
+                    "included_in_primary": (
+                        model in target_models and exclusion_reason is None
+                    ),
+                    "primary_exclusion_reason": (
+                        exclusion_reason
+                        if model in target_models
+                        else "auxiliary_model"
+                    ),
                 }
             )
         else:
@@ -261,7 +300,16 @@ def summarize_otel_inference_timing(
         (call["start_unix_ns"], call["end_unix_ns"])
         for call in inference_calls
     ]
-    target_calls = [call for call in inference_calls if call["is_target_model"]]
+    observed_target_calls = [
+        call for call in inference_calls if call["is_target_model"]
+    ]
+    target_calls = [
+        call for call in observed_target_calls if call.get("included_in_primary")
+    ]
+    excluded_target_calls = [
+        call for call in observed_target_calls
+        if not call.get("included_in_primary")
+    ]
     auxiliary_calls = [
         call
         for call in inference_calls
@@ -306,13 +354,21 @@ def summarize_otel_inference_timing(
     target_cache_creation_tokens = sum(
         int(call["cache_creation_input_tokens"] or 0) for call in target_calls
     )
+    ttft_values = [
+        float(call["ttft_ms"])
+        for call in target_calls
+        if call.get("ttft_ms") is not None
+        and float(call["ttft_ms"]) >= 0
+        and float(call["ttft_ms"]) <= float(call["request_seconds"]) * 1000
+    ]
 
     cli_reported = None
     model_usage_breakdown: dict[str, Any] = {}
     target_usage: dict[str, Any] | None = None
+    otel_diagnostic_reasons: list[str] = []
     coverage_reasons: list[str] = []
     if result_event is None:
-        coverage_reasons.append("missing_result_event")
+        coverage_reasons.append("missing_terminal_result_event")
     else:
         cli_reported = {
             "duration_ms": result_event.get("duration_ms"),
@@ -356,31 +412,49 @@ def summarize_otel_inference_timing(
         else "mismatched"
     )
     if not target_calls:
-        coverage_reasons.append("no_target_model_otel_spans")
+        otel_diagnostic_reasons.append("no_target_model_otel_spans")
+    if excluded_target_calls:
+        otel_diagnostic_reasons.append("excluded_unsuccessful_or_invalid_target_call")
     if target_usage is None:
-        coverage_reasons.append("target_model_missing_from_model_usage")
+        otel_diagnostic_reasons.append("target_model_missing_from_model_usage")
     if output_reconciliation != "matched":
-        coverage_reasons.append("target_output_tokens_not_reconciled")
+        otel_diagnostic_reasons.append("target_output_tokens_not_reconciled")
     observed_models = {
         str(call["model"]) for call in inference_calls if call.get("model")
     }
     missing_usage_models = sorted(set(model_usage_breakdown) - observed_models)
     if missing_usage_models:
-        coverage_reasons.append("model_usage_model_missing_from_otel_spans")
+        otel_diagnostic_reasons.append("model_usage_model_missing_from_otel_spans")
     if otel_diagnostics.get("payload_count", 0) == 0:
-        coverage_reasons.append("no_otel_trace_payloads")
+        otel_diagnostic_reasons.append("no_otel_trace_payloads")
     if otel_diagnostics.get("receiver_error_count", 0):
-        coverage_reasons.append("otel_receiver_error")
+        otel_diagnostic_reasons.append("otel_receiver_error")
     if otel_diagnostics.get("invalid_timing_span_count", 0):
-        coverage_reasons.append("invalid_otel_span_timing")
+        otel_diagnostic_reasons.append("invalid_otel_span_timing")
     if tool_timing_basis != "claude_code_otel_tool_spans" and tools:
-        coverage_reasons.append("otel_tool_spans_unavailable_host_fallback")
+        otel_diagnostic_reasons.append("otel_tool_spans_unavailable_host_fallback")
 
     api_seconds = (
         numeric(cli_reported.get("duration_api_ms")) / 1000
         if cli_reported and numeric(cli_reported.get("duration_api_ms")) is not None
         else None
     )
+    terminal_model_output_tokens: dict[str, int] = {}
+    for model, usage in model_usage_breakdown.items():
+        value = integer((usage or {}).get("outputTokens"))
+        if value is None or value < 0:
+            coverage_reasons.append(
+                f"invalid_terminal_output_tokens:{model}"
+            )
+        else:
+            terminal_model_output_tokens[str(model)] = value
+    terminal_output_tokens = sum(terminal_model_output_tokens.values())
+    if result_event is not None and result_event.get("is_error") is True:
+        coverage_reasons.append("terminal_result_is_error")
+    if not model_usage_breakdown:
+        coverage_reasons.append("missing_terminal_model_usage")
+    if api_seconds is None or api_seconds <= 0:
+        coverage_reasons.append("missing_terminal_duration_api_ms")
     llm_only_ns = max(0, all_request_union_ns - all_overlap_ns)
     tool_only_ns = max(0, tool_union_ns - all_overlap_ns)
     decomposition_error_ns = wall_ns - (
@@ -388,12 +462,14 @@ def summarize_otel_inference_timing(
     )
 
     return {
-        "schema_version": "claude-swebench-inference-accounting-2",
+        "schema_version": "claude-swebench-inference-accounting-3",
         "primary_model": target_model,
-        "timing_basis": "claude_code_otel_llm_request_spans",
+        "timing_basis": "claude_cli_terminal_duration_api_ms_all_models",
         "tool_timing_basis": tool_timing_basis,
         "server_engine_equivalent": False,
         "primary_call_count": len(target_calls),
+        "observed_target_call_count": len(observed_target_calls),
+        "excluded_target_call_count": len(excluded_target_calls),
         "auxiliary_call_count": len(auxiliary_calls),
         "auxiliary_models": sorted(
             {str(call["model"]) for call in auxiliary_calls}
@@ -409,6 +485,34 @@ def summarize_otel_inference_timing(
             target_output_tokens / target_request_seconds_sum
             if target_request_seconds_sum > 0
             else None
+        ),
+        "target_otel_request_output_tps_diagnostic": (
+            target_output_tokens / target_request_seconds_sum
+            if target_request_seconds_sum > 0
+            else None
+        ),
+        "target_otel_diagnostic_coverage": (
+            "complete" if not otel_diagnostic_reasons else "partial"
+        ),
+        "target_otel_diagnostic_coverage_reasons": otel_diagnostic_reasons,
+        "all_model_terminal_billed_output_tokens": terminal_output_tokens,
+        "all_model_terminal_output_tokens_by_model": terminal_model_output_tokens,
+        "terminal_request_active_seconds": api_seconds,
+        "end_to_end_inference_seconds": api_seconds,
+        "end_to_end_billed_tps": (
+            terminal_output_tokens / api_seconds
+            if api_seconds and terminal_output_tokens >= 0 else None
+        ),
+        "provider_reported_ttft_ms_median": (
+            statistics.median(ttft_values) if ttft_values else None
+        ),
+        "provider_reported_ttft_eligible_call_count": len(ttft_values),
+        "provider_reported_ttft_coverage": (
+            "complete"
+            if target_calls and len(ttft_values) == len(target_calls)
+            else "partial"
+            if ttft_values
+            else "unavailable"
         ),
         "primary_request_union_seconds": target_request_union_ns / 1_000_000_000,
         "all_model_request_union_seconds": all_request_union_ns / 1_000_000_000,
@@ -442,12 +546,13 @@ def summarize_otel_inference_timing(
         "coverage": "complete" if not coverage_reasons else "partial",
         "coverage_reasons": coverage_reasons,
         "note": (
-            "primary_request_seconds_sum is the sum of target-model Claude "
-            "Code llm_request span durations and is the TPS denominator. "
+            "The cross-agent headline uses authoritative terminal modelUsage "
+            "billed output across all models divided by terminal duration_api_ms. "
+            "Target-model OTel request TPS is diagnostic only and its token "
+            "reconciliation gap is exposed explicitly. "
             "Wall contribution fields use interval unions so parallel calls "
             "are not double-counted. Durations include client/API latency and "
-            "retries; they are not server-engine decode time. The CLI terminal "
-            "duration_api_ms value is retained only as a diagnostic."
+            "retries; they are not server-engine decode time."
         ),
     }
 

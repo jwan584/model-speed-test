@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import signal
 import shlex
 import shutil
 import subprocess
@@ -42,6 +43,29 @@ SPLIT = "test"
 MODEL = "claude-sonnet-5"
 EFFORT = "high"
 ALLOWED_TOOLS = "Bash,Read,Edit,Write,Glob,Grep"
+POST_TERMINAL_EXIT_GRACE_SECONDS = 30.0
+
+
+def terminal_result_is_success(result_event: dict[str, Any] | None) -> bool:
+    return bool(
+        result_event
+        and result_event.get("type") == "result"
+        and result_event.get("subtype") == "success"
+        and result_event.get("is_error") is not True
+        and result_event.get("duration_api_ms") is not None
+        and result_event.get("modelUsage")
+    )
+
+
+def solve_process_succeeded(
+    returncode: int,
+    result_event: dict[str, Any] | None,
+    post_terminal_teardown_forced: bool,
+) -> bool:
+    return returncode == 0 or (
+        post_terminal_teardown_forced
+        and terminal_result_is_success(result_event)
+    )
 
 
 def iso_now() -> str:
@@ -861,14 +885,22 @@ def main() -> int:
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     bufsize=1,
+                    start_new_session=True,
                 )
                 assert process.stdout is not None and process.stderr is not None
                 heartbeat_stop = threading.Event()
-                stderr_lines: list[str] = []
+                stderr_path = output / "claude_stderr.log"
+                stderr_bytes = 0
+                stderr_lock = threading.Lock()
 
                 def drain_stderr() -> None:
-                    for stderr_line in process.stderr:
-                        stderr_lines.append(stderr_line)
+                    nonlocal stderr_bytes
+                    with stderr_path.open("w") as stderr_file:
+                        for stderr_line in process.stderr:
+                            stderr_file.write(stderr_line)
+                            stderr_file.flush()
+                            with stderr_lock:
+                                stderr_bytes += len(stderr_line.encode())
 
                 stderr_thread = threading.Thread(target=drain_stderr, daemon=True)
                 stderr_thread.start()
@@ -885,6 +917,9 @@ def main() -> int:
                             int(((event.get("message") or {}).get("usage") or {}).get("output_tokens") or 0)
                             for event in target_calls
                         )
+                        with stderr_lock:
+                            observed_stderr_bytes = stderr_bytes
+                        otel_live = otel_receiver.diagnostics()
                         print(
                             json.dumps(
                                 {
@@ -894,6 +929,11 @@ def main() -> int:
                                     "elapsed_s": round(time.monotonic() - solve_start, 1),
                                     "assistant_messages_completed": len(target_calls),
                                     "target_output_tokens_completed": output_tokens,
+                                    "stderr_bytes": observed_stderr_bytes,
+                                    "otel_payload_count": otel_live["payload_count"],
+                                    "otel_receiver_error_count": otel_live[
+                                        "receiver_error_count"
+                                    ],
                                 }
                             ),
                             flush=True,
@@ -903,62 +943,100 @@ def main() -> int:
                     target=emit_running_heartbeat, daemon=True
                 )
                 heartbeat_thread.start()
-                for line in process.stdout:
-                    jsonl_file.write(line)
-                    jsonl_file.flush()
-                    received_unix_ns = time.time_ns()
-                    try:
-                        event = json.loads(line)
-                    except json.JSONDecodeError:
-                        print("[claude] non-JSON output", flush=True)
-                        continue
-                    event["_received_unix_ns"] = received_unix_ns
-                    stream_events.append(event)
-                    event_type = event.get("type")
-                    if event_type == "system" and event.get("subtype") == "init":
-                        metadata["resolved_model"] = event.get("model")
-                        metadata["resolved_permission_mode"] = event.get("permissionMode")
-                        metadata["resolved_tools"] = event.get("tools")
-                        print(f"[claude] session={event.get('session_id')} model={event.get('model')}", flush=True)
-                    elif event_type == "assistant":
-                        message = event.get("message", {}) or {}
-                        usage = message.get("usage") or {}
-                        for block in message.get("content") or []:
-                            if isinstance(block, dict) and block.get("type") == "tool_use":
-                                print(f"[claude] tool_use {block.get('name')}", flush=True)
+                terminal_seen = threading.Event()
+                post_terminal_teardown_forced = threading.Event()
+
+                def enforce_post_terminal_exit_grace() -> None:
+                    if not terminal_seen.wait():
+                        return
+                    if heartbeat_stop.wait(POST_TERMINAL_EXIT_GRACE_SECONDS):
+                        return
+                    if process.poll() is None:
+                        post_terminal_teardown_forced.set()
                         print(
                             json.dumps(
                                 {
-                                    "status": "inference_micro_session",
-                                    "call_index": sum(
-                                        1 for e in stream_events if e.get("type") == "assistant"
-                                    ),
-                                    "model": message.get("model"),
-                                    "output_tokens": usage.get("output_tokens"),
-                                    "cache_read_input_tokens": usage.get("cache_read_input_tokens"),
-                                    "timing": "pending_otel_span_flush",
+                                    "status": "post_terminal_teardown_forced",
+                                    "grace_seconds": POST_TERMINAL_EXIT_GRACE_SECONDS,
                                 }
                             ),
                             flush=True,
                         )
-                    elif event_type == "result":
-                        result_event = event
-                        print(f"[claude] result subtype={event.get('subtype')}", flush=True)
-                claude_returncode = process.wait()
-                solve_end_ns = time.time_ns()
-                solve_elapsed_seconds = time.monotonic() - solve_start
-                heartbeat_stop.set()
-                heartbeat_thread.join(timeout=1)
-                stderr_thread.join(timeout=10)
+                        os.killpg(process.pid, signal.SIGTERM)
+
+                teardown_watchdog = threading.Thread(
+                    target=enforce_post_terminal_exit_grace, daemon=True
+                )
+                teardown_watchdog.start()
+                try:
+                    for line in process.stdout:
+                        jsonl_file.write(line)
+                        jsonl_file.flush()
+                        received_unix_ns = time.time_ns()
+                        try:
+                            event = json.loads(line)
+                        except json.JSONDecodeError:
+                            print("[claude] non-JSON output", flush=True)
+                            continue
+                        event["_received_unix_ns"] = received_unix_ns
+                        stream_events.append(event)
+                        event_type = event.get("type")
+                        if event_type == "system" and event.get("subtype") == "init":
+                            metadata["resolved_model"] = event.get("model")
+                            metadata["resolved_permission_mode"] = event.get("permissionMode")
+                            metadata["resolved_tools"] = event.get("tools")
+                            print(f"[claude] session={event.get('session_id')} model={event.get('model')}", flush=True)
+                        elif event_type == "assistant":
+                            message = event.get("message", {}) or {}
+                            usage = message.get("usage") or {}
+                            for block in message.get("content") or []:
+                                if isinstance(block, dict) and block.get("type") == "tool_use":
+                                    print(f"[claude] tool_use {block.get('name')}", flush=True)
+                            print(
+                                json.dumps(
+                                    {
+                                        "status": "inference_micro_session",
+                                        "call_index": sum(
+                                            1 for e in stream_events if e.get("type") == "assistant"
+                                        ),
+                                        "model": message.get("model"),
+                                        "output_tokens": usage.get("output_tokens"),
+                                        "cache_read_input_tokens": usage.get("cache_read_input_tokens"),
+                                        "timing": "pending_otel_span_flush",
+                                    }
+                                ),
+                                flush=True,
+                            )
+                        elif event_type == "result":
+                            result_event = event
+                            terminal_seen.set()
+                            print(f"[claude] result subtype={event.get('subtype')}", flush=True)
+                    claude_returncode = process.wait()
+                finally:
+                    if process.poll() is None:
+                        os.killpg(process.pid, signal.SIGTERM)
+                        try:
+                            process.wait(timeout=10)
+                        except subprocess.TimeoutExpired:
+                            os.killpg(process.pid, signal.SIGKILL)
+                            process.wait()
+                    solve_end_ns = time.time_ns()
+                    solve_elapsed_seconds = time.monotonic() - solve_start
+                    heartbeat_stop.set()
+                    heartbeat_thread.join(timeout=1)
+                    stderr_thread.join(timeout=10)
+                    teardown_watchdog.join(timeout=1)
         finally:
             otel_receiver.wait_for_quiet()
             otel_payloads = otel_receiver.payloads()
             otel_receiver_diagnostics = otel_receiver.diagnostics()
             otel_receiver.stop()
-        (output / "claude_stderr.log").write_text("".join(stderr_lines))
         metadata["solve_ended_at"] = iso_now()
         metadata["solve_seconds"] = round(solve_elapsed_seconds, 3)
         metadata["claude_returncode"] = claude_returncode
+        metadata["post_terminal_teardown_forced"] = (
+            post_terminal_teardown_forced.is_set()
+        )
         metadata["claude"] = parse_claude_events(stream_events)
 
         timeline = build_timeline(stream_events, solve_start_ns)
@@ -1034,15 +1112,23 @@ def main() -> int:
             "".join(json.dumps(call, sort_keys=True) + "\n" for call in inference_calls)
         )
         metadata["inference_timing"] = inference_timing
-        if inference_timing["timing_basis"] == "claude_code_otel_llm_request_spans":
+        if "primary_request_seconds_sum" in inference_timing:
             print(
-                "[timing] "
-                f"coverage={inference_timing['coverage']} "
+                "[timing:target_otel_diagnostic] "
+                f"coverage={inference_timing['target_otel_diagnostic_coverage']} "
                 f"calls={inference_timing['primary_call_count']} "
                 f"tokens={inference_timing['primary_output_tokens']} "
                 f"request_s={inference_timing['primary_request_seconds_sum']:.6f} "
                 f"tool_s={inference_timing['total_tool_seconds']:.6f} "
-                f"tps={inference_timing['primary_request_output_tps']}",
+                f"tps={inference_timing['target_otel_request_output_tps_diagnostic']}",
+                flush=True,
+            )
+            print(
+                "[timing:all_model_agent_request_headline] "
+                f"coverage={inference_timing['coverage']} "
+                f"tokens={inference_timing['all_model_terminal_billed_output_tokens']} "
+                f"request_s={inference_timing['terminal_request_active_seconds']:.6f} "
+                f"tps={inference_timing['end_to_end_billed_tps']}",
                 flush=True,
             )
             partition = inference_timing["wall_partition"]
@@ -1082,7 +1168,16 @@ def main() -> int:
         predictions_path = output / "preds.jsonl"
         predictions_path.write_text(json.dumps(prediction) + "\n")
         write_json(output / "preds.json", {problem["instance_id"]: prediction})
-        metadata["status"] = "patch_captured" if patch.strip() and claude_returncode == 0 else "solve_failed"
+        metadata["status"] = (
+            "patch_captured"
+            if patch.strip()
+            and solve_process_succeeded(
+                claude_returncode,
+                result_event,
+                post_terminal_teardown_forced.is_set(),
+            )
+            else "solve_failed"
+        )
         metadata["inference_timing_complete"] = inference_timing["coverage"] == "complete"
         write_json(metadata_path, metadata)
     finally:

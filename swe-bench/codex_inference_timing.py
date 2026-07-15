@@ -106,8 +106,8 @@ def parse_lifecycle_trace_line(line: str) -> dict[str, Any] | None:
     }
     required = (
         "model",
-        "provider_event_started_unix_ns",
         "completed_unix_ns",
+        "request_to_completed_ms",
         "output_tokens",
     )
     return parsed if all(parsed.get(field) is not None for field in required) else None
@@ -244,12 +244,26 @@ def summarize_lifecycle(
         start_ns = exact_integer(trace.get("provider_event_started_unix_ns"))
         end_ns = exact_integer(trace.get("completed_unix_ns"))
         output_tokens = integer(trace.get("output_tokens"))
+        reasoning_output_tokens = integer(trace.get("reasoning_output_tokens"))
+        request_seconds = (
+            numeric(trace.get("request_to_completed_ms")) / 1000
+            if numeric(trace.get("request_to_completed_ms")) is not None
+            else None
+        )
+        valid_request_duration = request_seconds is not None and request_seconds > 0
+        provider_window_seconds = (
+            numeric(trace.get("provider_event_window_ms")) / 1000
+            if numeric(trace.get("provider_event_window_ms")) is not None
+            else None
+        )
+        valid_provider_window = (
+            provider_window_seconds is not None and provider_window_seconds > 0
+        )
         window_ns = (
             end_ns - start_ns
             if start_ns is not None and end_ns is not None and end_ns > start_ns
             else None
         )
-        valid_window = window_ns is not None and window_ns > 0
         request_window_ns = (
             end_ns - request_start_ns
             if request_start_ns is not None
@@ -262,7 +276,7 @@ def summarize_lifecycle(
         )
         overlap_ns = (
             min(window_ns, interval_overlap_ns((start_ns, end_ns), tool_union))
-            if valid_window
+            if window_ns is not None
             else None
         )
         request_overlap_ns = (
@@ -278,32 +292,40 @@ def summarize_lifecycle(
             exclusion_reason = "auxiliary_model"
         elif trace.get("warmup") is True:
             exclusion_reason = "warmup"
-        elif not valid_window:
-            exclusion_reason = "invalid_lifecycle_window"
+        elif not valid_request_duration:
+            exclusion_reason = "invalid_request_duration"
         elif output_tokens is None:
             exclusion_reason = "missing_output_tokens"
+        elif output_tokens < 0:
+            exclusion_reason = "invalid_output_tokens"
+        elif reasoning_output_tokens is not None and not (
+            0 <= reasoning_output_tokens <= output_tokens
+        ):
+            exclusion_reason = "invalid_reasoning_output_tokens"
 
-        window_seconds = window_ns / 1_000_000_000 if window_ns else None
         call = {
-            "schema_version": "codex-swebench-inference-call-1",
+            "schema_version": "codex-swebench-inference-call-2",
             "call_index": len(calls) + 1,
             **trace,
-            "provider_window_inference_seconds": window_seconds,
+            "outcome": "completed",
+            "end_to_end_inference_seconds": request_seconds,
+            "end_to_end_billed_tps": (
+                output_tokens / request_seconds
+                if output_tokens is not None and valid_request_duration
+                else None
+            ),
+            "provider_window_inference_seconds": provider_window_seconds,
             "provider_window_output_tps": (
-                output_tokens / window_seconds
-                if output_tokens is not None and window_seconds else None
+                output_tokens / provider_window_seconds
+                if output_tokens is not None and valid_provider_window else None
             ),
             "tool_overlap_seconds": (
                 overlap_ns / 1_000_000_000 if overlap_ns is not None else None
             ),
-            "request_active_seconds": (
-                request_window_ns / 1_000_000_000
-                if request_window_ns is not None
-                else None
-            ),
+            "request_active_seconds": request_seconds,
             "request_active_output_tps": (
-                output_tokens / (request_window_ns / 1_000_000_000)
-                if output_tokens is not None and valid_request_window
+                output_tokens / request_seconds
+                if output_tokens is not None and valid_request_duration
                 else None
             ),
             "request_active_tool_overlap_seconds": (
@@ -315,29 +337,43 @@ def summarize_lifecycle(
             "primary_exclusion_reason": exclusion_reason,
         }
         calls.append(call)
-        if valid_window and trace.get("warmup") is not True:
+        if window_ns is not None and trace.get("warmup") is not True:
             all_model_windows.append((start_ns, end_ns))
         if valid_request_window and trace.get("warmup") is not True:
             all_model_request_windows.append((request_start_ns, end_ns))
         if exclusion_reason is None:
-            target_windows.append((start_ns, end_ns))
+            if window_ns is not None:
+                target_windows.append((start_ns, end_ns))
             if valid_request_window:
                 target_request_windows.append((request_start_ns, end_ns))
 
     eligible = [call for call in calls if call["included_in_primary"]]
     output_tokens = sum(int(call["output_tokens"]) for call in eligible)
-    inference_seconds = sum(
-        float(call["provider_window_inference_seconds"]) for call in eligible
+    end_to_end_seconds = sum(
+        float(call["end_to_end_inference_seconds"]) for call in eligible
     )
-    request_active_seconds = sum(
-        float(call["request_active_seconds"])
+    provider_window_eligible = [
+        call for call in eligible
+        if call.get("provider_window_inference_seconds") is not None
+    ]
+    provider_window_seconds = sum(
+        float(call["provider_window_inference_seconds"])
+        for call in provider_window_eligible
+    )
+    reasoning_output_tokens = sum(
+        int(call["reasoning_output_tokens"])
         for call in eligible
-        if call.get("request_active_seconds") is not None
+        if call.get("reasoning_output_tokens") is not None
     )
     target_tool_overlap_seconds = sum(
-        float(call["tool_overlap_seconds"]) for call in eligible
+        float(call["tool_overlap_seconds"])
+        for call in eligible
+        if call.get("tool_overlap_seconds") is not None
     )
     turn_output_tokens = integer(turn_usage.get("output_tokens"))
+    turn_reasoning_output_tokens = integer(
+        turn_usage.get("reasoning_output_tokens")
+    )
     output_reconciliation = (
         "matched"
         if turn_output_tokens is not None and turn_output_tokens == output_tokens
@@ -364,10 +400,21 @@ def summarize_lifecycle(
         coverage_reasons.append("no_eligible_target_calls")
     if output_reconciliation != "matched":
         coverage_reasons.append("output_tokens_not_reconciled")
+    if (
+        turn_reasoning_output_tokens is not None
+        and turn_reasoning_output_tokens != reasoning_output_tokens
+    ):
+        coverage_reasons.append("reasoning_output_tokens_not_reconciled")
     if fallback_count:
         coverage_reasons.append("request_sent_boundary_fallback")
-    if any(call.get("request_active_seconds") is None for call in eligible):
-        coverage_reasons.append("missing_request_sent_boundary")
+    if any(
+        call.get("request_sent_unix_ns") is None
+        or call.get("completed_unix_ns") is None
+        for call in eligible
+    ):
+        coverage_reasons.append("missing_request_wall_boundary")
+    if len(provider_window_eligible) != len(eligible):
+        coverage_reasons.append("missing_secondary_provider_window")
 
     all_model_union = union_intervals(all_model_windows)
     target_union = union_intervals(target_windows)
@@ -414,25 +461,33 @@ def summarize_lifecycle(
     )
 
     summary = {
-        "schema_version": "codex-swebench-inference-accounting-1",
+        "schema_version": "codex-swebench-inference-accounting-2",
         "primary_model": target_model,
-        "timing_basis": "response.created_to_response.completed",
+        "timing_basis": "request_dispatch_to_response.completed_monotonic",
         "server_engine_equivalent": False,
         "lifecycle_trace_count": len(traces),
         "malformed_lifecycle_trace_count": malformed_trace_count,
         "primary_eligible_call_count": len(eligible),
         "primary_missing_call_count": len(target_missing),
         "primary_output_tokens": output_tokens,
+        "primary_reasoning_output_tokens": reasoning_output_tokens,
         "turn_usage_output_tokens": turn_output_tokens,
+        "turn_usage_reasoning_output_tokens": turn_reasoning_output_tokens,
         "output_token_reconciliation": output_reconciliation,
-        "provider_window_inference_seconds": inference_seconds,
-        "provider_window_output_tps": (
-            output_tokens / inference_seconds if inference_seconds else None
+        "end_to_end_inference_seconds": end_to_end_seconds,
+        "end_to_end_billed_tps": (
+            output_tokens / end_to_end_seconds if end_to_end_seconds else None
         ),
-        "primary_request_seconds_sum": request_active_seconds,
+        "provider_window_inference_seconds": provider_window_seconds,
+        "provider_window_output_tps": (
+            output_tokens / provider_window_seconds
+            if provider_window_seconds else None
+        ),
+        "provider_window_eligible_call_count": len(provider_window_eligible),
+        "primary_request_seconds_sum": end_to_end_seconds,
         "primary_request_output_tps": (
-            output_tokens / request_active_seconds
-            if request_active_seconds
+            output_tokens / end_to_end_seconds
+            if end_to_end_seconds
             else None
         ),
         "primary_request_union_seconds": (

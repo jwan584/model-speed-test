@@ -89,12 +89,21 @@ def result_row(problem_number: int, tier: str, run_dir: Path, metadata: dict) ->
     problem = metadata.get("problem") or {}
     input_tokens = usage.get("input_tokens")
     cached_tokens = usage.get("cached_input_tokens")
+    status = metadata.get("status")
+    if (
+        status == "solve_failed"
+        and metadata.get("codex_returncode") == 0
+        and metadata.get("solve_timed_out") is not True
+        and inference.get("coverage") == "complete"
+        and patch.get("nonempty") is False
+    ):
+        status = "completed_without_evaluation_no_patch"
     return {
         "problem_number": problem_number,
         "dataset_index": problem_number - 1,
         "instance_id": problem.get("instance_id"),
         "tier": tier,
-        "status": metadata.get("status"),
+        "status": status,
         "correctness": "not_evaluated",
         "setup_seconds": metadata.get("setup_seconds"),
         "solve_seconds": metadata.get("solve_seconds"),
@@ -113,6 +122,11 @@ def result_row(problem_number: int, tier: str, run_dir: Path, metadata: dict) ->
         "provider_window_output_tokens": inference.get(
             "primary_output_tokens"
         ),
+        "end_to_end_inference_seconds": inference.get(
+            "end_to_end_inference_seconds"
+        ),
+        "end_to_end_billed_tps": inference.get("end_to_end_billed_tps"),
+        "billed_output_tokens": inference.get("primary_output_tokens"),
         "inference_timing_coverage": inference.get("coverage"),
         "inference_micro_sessions": inference.get("primary_eligible_call_count"),
         "inference_tool_concurrency_seconds": inference.get(
@@ -147,6 +161,8 @@ def summarize(rows: list[dict]) -> dict:
         "inference_and_orchestration_seconds_estimate",
         "provider_window_inference_seconds",
         "provider_window_output_tokens",
+        "end_to_end_inference_seconds",
+        "billed_output_tokens",
         "inference_micro_sessions",
         "inference_tool_concurrency_seconds",
         "container_test_seconds",
@@ -181,16 +197,21 @@ def summarize(rows: list[dict]) -> dict:
     complete_timing_rows = [
         row
         for row in rows
-        if row.get("inference_timing_coverage") == "complete"
-        and isinstance(row.get("provider_window_inference_seconds"), (int, float))
-        and isinstance(row.get("provider_window_output_tokens"), (int, float))
+        if row.get("status") in {
+            "completed",
+            "completed_without_evaluation",
+            "completed_without_evaluation_no_patch",
+        }
+        and row.get("inference_timing_coverage") == "complete"
+        and isinstance(row.get("end_to_end_inference_seconds"), (int, float))
+        and isinstance(row.get("billed_output_tokens"), (int, float))
     ]
     inference_seconds = sum(
-        float(row["provider_window_inference_seconds"])
+        float(row["end_to_end_inference_seconds"])
         for row in complete_timing_rows
     )
     output_tokens = sum(
-        int(row["provider_window_output_tokens"])
+        int(row["billed_output_tokens"])
         for row in complete_timing_rows
     )
     result.update(
@@ -203,11 +224,11 @@ def summarize(rows: list[dict]) -> dict:
                 if rows
                 else "unavailable"
             ),
-            "provider_window_inference_seconds_total": round(
+            "end_to_end_inference_seconds_total": round(
                 inference_seconds, 6
             ),
-            "provider_window_output_tokens_total": output_tokens,
-            "provider_window_output_tps_ratio_of_sums": (
+            "billed_output_tokens_total": output_tokens,
+            "end_to_end_billed_tps_ratio_of_sums": (
                 output_tokens / inference_seconds if inference_seconds else None
             ),
         }
@@ -223,7 +244,7 @@ def render_markdown(batch: dict) -> str:
         f"Reasoning: `{batch['reasoning']}`  ",
         "Correctness: not evaluated",
         "",
-        "| # | Instance | Status | Solve s | Tool s | Inference s | TPS | Coverage | Calls | Test s | Inference output |",
+        "| # | Instance | Status | Solve s | Tool s | Request s | End-to-end TPS | Coverage | Calls | Test s | Billed output |",
         "|---:|---|---|---:|---:|---:|---:|---|---:|---:|---:|",
     ]
     for row in batch["runs"]:
@@ -234,12 +255,12 @@ def render_markdown(batch: dict) -> str:
         lines.append(
             f"| {row['problem_number']} | {value('instance_id')} | {value('status')} | "
             f"{value('solve_seconds')} | {value('tool_seconds')} | "
-            f"{value('provider_window_inference_seconds')} | "
-            f"{value('provider_window_output_tps')} | "
+            f"{value('end_to_end_inference_seconds')} | "
+            f"{value('end_to_end_billed_tps')} | "
             f"{value('inference_timing_coverage')} | "
             f"{value('inference_micro_sessions')} | "
             f"{value('container_test_seconds')} | "
-            f"{value('provider_window_output_tokens')} |"
+            f"{value('billed_output_tokens')} |"
         )
     lines.extend(
         [
@@ -250,7 +271,7 @@ def render_markdown(batch: dict) -> str:
             json.dumps(batch["aggregate"], indent=2, sort_keys=True),
             "```",
             "",
-            "*Inference uses client-observed response.created → response.completed windows; it is not server-engine timing.",
+            "*Headline TPS uses successful request-dispatch → terminal-response durations and provider-billed output tokens; it is not server-engine timing. response.created windows remain secondary diagnostics.*",
             "",
         ]
     )
@@ -265,6 +286,17 @@ def main() -> int:
     parser.add_argument("--reasoning", default=REASONING)
     parser.add_argument("--codex-bin", type=Path, default=INSTRUMENTED_CODEX)
     parser.add_argument(
+        "--python",
+        type=Path,
+        default=PYTHON,
+        help="Pinned SWE-bench runner Python used for each problem",
+    )
+    parser.add_argument(
+        "--codex-sandbox",
+        choices=["workspace-write", "danger-full-access"],
+        default="workspace-write",
+    )
+    parser.add_argument(
         "--allow-running-containers",
         action="store_true",
         help="Permit unrelated running Docker containers (reduces benchmark integrity)",
@@ -272,6 +304,27 @@ def main() -> int:
     args = parser.parse_args()
 
     env = os.environ.copy()
+    if not args.python.is_file():
+        raise SystemExit(f"BLOCKER: runner Python does not exist: {args.python}")
+    if not args.codex_bin.is_file():
+        raise SystemExit(f"BLOCKER: Codex binary does not exist: {args.codex_bin}")
+    env["SWE_BENCH_MINI_PYTHON"] = str(args.python.resolve())
+    if not env.get("SSL_CERT_FILE") and Path("/etc/ssl/cert.pem").is_file():
+        env["SSL_CERT_FILE"] = "/etc/ssl/cert.pem"
+    auth_check = subprocess.run(
+        [str(args.codex_bin.resolve()), "login", "status"],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    if auth_check.returncode != 0:
+        raise SystemExit(
+            "BLOCKER: Codex is not authenticated in the configured CODEX_HOME; "
+            "run `CODEX_HOME=<benchmark-home> codex login --device-auth` first."
+        )
     containers = running_containers(env)
     if containers and not args.allow_running_containers:
         raise SystemExit(
@@ -290,6 +343,7 @@ def main() -> int:
         "tier": args.tier,
         "model": args.model,
         "reasoning": args.reasoning,
+        "codex_sandbox": args.codex_sandbox,
         "codex_binary": str(args.codex_bin.resolve()),
         "problem_numbers": list(range(1, 11)),
         "exclusive_sequential_solves": True,
@@ -319,7 +373,7 @@ def main() -> int:
             flush=True,
         )
         command = [
-            str(PYTHON),
+            str(args.python),
             str(ADAPTER),
             "--index",
             str(problem_number - 1),
@@ -330,6 +384,8 @@ def main() -> int:
             "--codex-bin",
             str(args.codex_bin.resolve()),
             "--require-inference-timing",
+            "--codex-sandbox",
+            args.codex_sandbox,
             "--service-tier",
             args.tier,
             "--output",
@@ -369,7 +425,11 @@ def main() -> int:
     print(f"\nBATCH_JSON={manifest_path}")
     print(f"BATCH_CSV={csv_path}")
     print(f"BATCH_MARKDOWN={markdown_path}")
-    successful = {"completed", "completed_without_evaluation"}
+    successful = {
+        "completed",
+        "completed_without_evaluation",
+        "completed_without_evaluation_no_patch",
+    }
     return 0 if len(rows) == 10 and all(row["status"] in successful for row in rows) else 1
 
 

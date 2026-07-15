@@ -86,6 +86,45 @@ class ClaudeOtelReceiverTests(unittest.TestCase):
 
 
 class ClaudeOtelAccountingTests(unittest.TestCase):
+    def test_terminal_all_model_headline_survives_target_otel_gap(self):
+        trace_payload = payload(
+            span(
+                "claude_code.llm_request",
+                1,
+                2,
+                model="claude-fable-5",
+                duration_ms=1000,
+                success=True,
+                output_tokens=100,
+            )
+        )
+        calls, tools, normalization = build_otel_timing_records(
+            [trace_payload],
+            {"claude-fable-5"},
+            BASE_NS,
+            BASE_NS + 3_000_000_000,
+        )
+        summary = summarize_otel_inference_timing(
+            {
+                "duration_api_ms": 2000,
+                "is_error": False,
+                "modelUsage": {
+                    "claude-fable-5": {"outputTokens": 120},
+                    "claude-haiku-4-5": {"outputTokens": 10},
+                },
+            },
+            calls,
+            tools,
+            "claude-fable-5",
+            BASE_NS,
+            BASE_NS + 3_000_000_000,
+            {"payload_count": 1, "receiver_error_count": 0, **normalization},
+        )
+        self.assertEqual(summary["coverage"], "complete")
+        self.assertEqual(summary["end_to_end_billed_tps"], 65.0)
+        self.assertEqual(summary["output_token_reconciliation"], "mismatched")
+        self.assertEqual(summary["target_otel_diagnostic_coverage"], "partial")
+
     def test_target_tps_and_overlap_safe_wall_partition(self):
         trace_payload = payload(
             span(
@@ -94,6 +133,8 @@ class ClaudeOtelAccountingTests(unittest.TestCase):
                 4,
                 model="claude-sonnet-5",
                 duration_ms=3000,
+                ttft_ms=500,
+                success=True,
                 output_tokens=300,
                 input_tokens=1000,
                 cache_read_tokens=800,
@@ -106,6 +147,7 @@ class ClaudeOtelAccountingTests(unittest.TestCase):
                 3,
                 model="claude-haiku-4-5",
                 duration_ms=1000,
+                success=True,
                 output_tokens=10,
                 input_tokens=20,
                 query_source="compact",
@@ -116,6 +158,8 @@ class ClaudeOtelAccountingTests(unittest.TestCase):
                 7,
                 model="claude-sonnet-5",
                 duration_ms=2000,
+                ttft_ms=300,
+                success=True,
                 output_tokens=200,
                 input_tokens=1100,
                 cache_read_tokens=900,
@@ -171,6 +215,11 @@ class ClaudeOtelAccountingTests(unittest.TestCase):
         self.assertEqual(summary["primary_output_tokens"], 500)
         self.assertEqual(summary["primary_request_seconds_sum"], 5.0)
         self.assertEqual(summary["primary_request_output_tps"], 100.0)
+        self.assertEqual(summary["end_to_end_billed_tps"], 85.0)
+        self.assertEqual(summary["all_model_terminal_billed_output_tokens"], 510)
+        self.assertEqual(summary["terminal_request_active_seconds"], 6.0)
+        self.assertEqual(summary["target_otel_request_output_tps_diagnostic"], 100.0)
+        self.assertEqual(summary["provider_reported_ttft_ms_median"], 400.0)
         self.assertEqual(summary["primary_request_union_seconds"], 5.0)
         self.assertEqual(summary["total_tool_seconds"], 5.0)
         self.assertEqual(summary["all_model_request_tool_concurrency_seconds"], 3.0)
@@ -185,13 +234,15 @@ class ClaudeOtelAccountingTests(unittest.TestCase):
             },
         )
 
-    def test_invisible_auxiliary_usage_makes_coverage_partial(self):
+    def test_invisible_auxiliary_usage_keeps_terminal_headline_complete(self):
         trace_payload = payload(
             span(
                 "claude_code.llm_request",
                 1,
                 2,
                 model="claude-sonnet-5",
+                duration_ms=1000,
+                success=True,
                 output_tokens=100,
             )
         )
@@ -203,6 +254,7 @@ class ClaudeOtelAccountingTests(unittest.TestCase):
         )
         summary = summarize_otel_inference_timing(
             {
+                "duration_api_ms": 2000,
                 "modelUsage": {
                     "claude-sonnet-5": {"outputTokens": 100},
                     "claude-haiku-4-5": {"outputTokens": 4},
@@ -219,11 +271,59 @@ class ClaudeOtelAccountingTests(unittest.TestCase):
                 **normalization,
             },
         )
-        self.assertEqual(summary["coverage"], "partial")
+        self.assertEqual(summary["coverage"], "complete")
+        self.assertEqual(summary["end_to_end_billed_tps"], 52.0)
+        self.assertEqual(summary["target_otel_diagnostic_coverage"], "partial")
         self.assertIn(
             "model_usage_model_missing_from_otel_spans",
-            summary["coverage_reasons"],
+            summary["target_otel_diagnostic_coverage_reasons"],
         )
+
+    def test_failed_target_call_is_excluded_and_marks_coverage_partial(self):
+        trace_payload = payload(
+            span(
+                "claude_code.llm_request",
+                1,
+                2,
+                model="claude-sonnet-5",
+                duration_ms=1000,
+                success=False,
+                output_tokens=25,
+            ),
+            span(
+                "claude_code.llm_request",
+                2,
+                4,
+                model="claude-sonnet-5",
+                duration_ms=2000,
+                success=True,
+                output_tokens=100,
+            ),
+        )
+        calls, tools, normalization = build_otel_timing_records(
+            [trace_payload],
+            {"claude-sonnet-5"},
+            BASE_NS,
+            BASE_NS + 5_000_000_000,
+        )
+        summary = summarize_otel_inference_timing(
+            {
+                "duration_api_ms": 2500,
+                "modelUsage": {"claude-sonnet-5": {"outputTokens": 100}},
+            },
+            calls,
+            tools,
+            "claude-sonnet-5",
+            BASE_NS,
+            BASE_NS + 5_000_000_000,
+            {"payload_count": 1, "receiver_error_count": 0, **normalization},
+        )
+        self.assertFalse(calls[0]["included_in_primary"])
+        self.assertTrue(calls[1]["included_in_primary"])
+        self.assertEqual(summary["primary_output_tokens"], 100)
+        self.assertEqual(summary["end_to_end_inference_seconds"], 2.5)
+        self.assertEqual(summary["coverage"], "complete")
+        self.assertEqual(summary["target_otel_diagnostic_coverage"], "partial")
 
 
 if __name__ == "__main__":

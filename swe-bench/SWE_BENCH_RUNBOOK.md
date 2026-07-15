@@ -137,13 +137,12 @@ seconds. QEMU is slower, so do not abort merely because the native baseline has
 passed. With `DOCKER_CONFIG` set correctly, completion should occur shortly
 after the agent emits its submission command instead of looping.
 
-Never use a previous timing as a kill threshold and do not add an arbitrary
-wall-clock timeout around the harness. SWE-bench tasks legitimately vary from
-minutes to much longer, and QEMU adds further variance. Once the preflight
-checks pass, keep the foreground harness attached and wait for its own terminal
-state. Terminate only on concrete failure evidence, such as a dead Docker
-daemon, a missing container while the harness is active, a terminal API error,
-or an explicit harness exception—not elapsed time or log silence alone.
+Never use a previous timing as a kill threshold or add an ad hoc wrapper
+timeout. SWE-bench tasks legitimately vary from minutes to much longer, and
+QEMU adds further variance. Use the harness's documented per-attempt bound and
+heartbeat. A bound hit, dead Docker daemon, missing active container, terminal
+API error, or explicit harness exception is persisted as a failed/excluded
+attempt; log silence by itself is not failure evidence.
 
 In a separate read-only command, inspect:
 
@@ -256,10 +255,15 @@ bash ./run_codex_swebench_problem Q1 \
   --evaluate-existing runs/<machine>/<completed-run-directory>
 ```
 
-Each target-model response is one micro-session timed from
-`response.created` through `response.completed`. Aggregate TPS is always
-computed as total output tokens divided by the sum of those complete windows,
-not the mean of per-call rates. Warmup and auxiliary-model calls are excluded.
+Each target-model response is one micro-session. The comparable headline is
+timed from request dispatch through the terminal response using the
+instrumented monotonic duration. Aggregate `end_to_end_billed_tps` is total
+provider-billed output tokens divided by the sum of eligible successful-call
+durations, not the mean of per-call rates. Warmup, auxiliary-model, failed,
+retried, truncated, incomplete, token-missing, and duration-missing calls are
+excluded and reported separately. Summed per-call output tokens must reconcile
+to final authoritative usage. `response.created` through `response.completed`
+is retained only as a secondary diagnostic.
 Tool intervals and inference/tool concurrency are reported separately; tool
 overlap is never subtracted from a provider lifecycle window.
 
@@ -268,7 +272,26 @@ The terminal emits a passive heartbeat every 30 seconds plus an
 `run_metadata.json`, `inference_calls.jsonl`, `tool_intervals.jsonl`,
 `codex_timeline.jsonl`, and `codex_stderr.log` in the run directory. A required
 timing run exits nonzero if lifecycle coverage or output-token reconciliation
-is incomplete.
+is incomplete. Codex solves default to a 3,600-second `--solve-timeout`; the
+watchdog terminates a stuck child, records the timeout, and then executes normal
+container/worktree cleanup. Timed-out tasks are excluded from strict cohort
+TPS even if earlier internal calls had complete lifecycle records.
+
+Before a native Codex batch, verify `codex login status` under the exact
+`CODEX_HOME` the harness will use. Managed runners may be unable to read
+`~/.codex`; in that case authenticate the Git-ignored
+`LiveCodeBench/.codex-benchmark-home` once with `codex login --device-auth` and
+export its absolute path. The batch fails before Q1 if the runner Python,
+instrumented binary, or Codex authentication is unavailable, preventing ten
+identical setup-only failures.
+
+Run one task smoke before a paid cohort and confirm repository reads plus patch
+capture. Under an outer managed macOS sandbox, nested `sandbox-exec` can fail
+with `sandbox_apply: Operation not permitted`. In that specific environment,
+use `--codex-sandbox danger-full-access` only inside the disposable worktree;
+the prompt's Docker command bridge remains the execution boundary. Exclude any
+cohort in which repository operations were sandbox-rejected, regardless of
+whether timing traces reconciled.
 
 ## Recovery and cleanup
 

@@ -12,6 +12,44 @@ from codex_swebench_problem1 import run_with_heartbeat
 
 
 class CodexInferenceTimingTests(unittest.TestCase):
+    def test_batch_tps_excludes_failed_inference_even_with_timing_fields(self):
+        from codex_swebench_1_10 import summarize
+
+        summary = summarize(
+            [
+                {
+                    "status": "solve_failed",
+                    "inference_timing_coverage": "complete",
+                    "end_to_end_inference_seconds": 1.0,
+                    "billed_output_tokens": 1000,
+                },
+                {
+                    "status": "completed_without_evaluation",
+                    "inference_timing_coverage": "complete",
+                    "end_to_end_inference_seconds": 2.0,
+                    "billed_output_tokens": 20,
+                },
+            ]
+        )
+        self.assertEqual(summary["inference_timing_complete_runs"], 1)
+        self.assertEqual(summary["end_to_end_billed_tps_ratio_of_sums"], 10.0)
+
+    def test_batch_tps_includes_completed_task_with_no_patch(self):
+        from codex_swebench_1_10 import summarize
+
+        summary = summarize(
+            [
+                {
+                    "status": "completed_without_evaluation_no_patch",
+                    "inference_timing_coverage": "complete",
+                    "end_to_end_inference_seconds": 2.0,
+                    "billed_output_tokens": 20,
+                }
+            ]
+        )
+        self.assertEqual(summary["inference_timing_complete_runs"], 1)
+        self.assertEqual(summary["end_to_end_billed_tps_ratio_of_sums"], 10.0)
+
     def test_parse_lifecycle_trace_preserves_nanoseconds(self):
         line = (
             "TRACE codex_api::responses_websocket_lifecycle: lifecycle "
@@ -41,7 +79,10 @@ class CodexInferenceTimingTests(unittest.TestCase):
                 "request_sent_unix_ns": 1_500_000_000,
                 "provider_event_started_unix_ns": 2_000_000_000,
                 "completed_unix_ns": 3_000_000_000,
+                "request_to_completed_ms": 1500.0,
+                "provider_event_window_ms": 1000.0,
                 "output_tokens": 45,
+                "reasoning_output_tokens": 12,
             }
         ]
         timeline = [
@@ -62,7 +103,7 @@ class CodexInferenceTimingTests(unittest.TestCase):
             traces,
             timeline,
             "gpt-test",
-            {"output_tokens": 45},
+            {"output_tokens": 45, "reasoning_output_tokens": 12},
             1_000_000_000,
             4_000_000_000,
         )
@@ -72,6 +113,8 @@ class CodexInferenceTimingTests(unittest.TestCase):
         self.assertEqual(summary["provider_window_output_tps"], 45.0)
         self.assertEqual(summary["primary_request_seconds_sum"], 1.5)
         self.assertEqual(summary["primary_request_output_tps"], 30.0)
+        self.assertEqual(summary["end_to_end_billed_tps"], 30.0)
+        self.assertEqual(summary["primary_reasoning_output_tokens"], 12)
         self.assertEqual(
             summary["request_active_wall_partition"],
             {
@@ -95,6 +138,8 @@ class CodexInferenceTimingTests(unittest.TestCase):
                 "request_sent_unix_ns": 900_000_000,
                 "provider_event_started_unix_ns": 1_000_000_000,
                 "completed_unix_ns": 1_100_000_000,
+                "request_to_completed_ms": 200.0,
+                "provider_event_window_ms": 100.0,
                 "output_tokens": 0,
             },
             {
@@ -104,6 +149,8 @@ class CodexInferenceTimingTests(unittest.TestCase):
                 "request_sent_unix_ns": 1_500_000_000,
                 "provider_event_started_unix_ns": 2_000_000_000,
                 "completed_unix_ns": 3_000_000_000,
+                "request_to_completed_ms": 1500.0,
+                "provider_event_window_ms": 1000.0,
                 "output_tokens": 20,
             },
             {
@@ -113,6 +160,8 @@ class CodexInferenceTimingTests(unittest.TestCase):
                 "request_sent_unix_ns": 3_500_000_000,
                 "provider_event_started_unix_ns": 4_000_000_000,
                 "completed_unix_ns": 6_000_000_000,
+                "request_to_completed_ms": 2500.0,
+                "provider_event_window_ms": 2000.0,
                 "output_tokens": 200,
             },
         ]
@@ -137,27 +186,27 @@ class CodexInferenceTimingTests(unittest.TestCase):
                 {
                     "status": "completed_without_evaluation",
                     "inference_timing_coverage": "complete",
-                    "provider_window_inference_seconds": 1.0,
-                    "provider_window_output_tps": 100.0,
-                    "provider_window_output_tokens": 100,
+                    "end_to_end_inference_seconds": 1.0,
+                    "end_to_end_billed_tps": 100.0,
+                    "billed_output_tokens": 100,
                     "output_tokens": 100,
                 },
                 {
                     "status": "completed_without_evaluation",
                     "inference_timing_coverage": "complete",
-                    "provider_window_inference_seconds": 10.0,
-                    "provider_window_output_tps": 10.0,
-                    "provider_window_output_tokens": 100,
+                    "end_to_end_inference_seconds": 10.0,
+                    "end_to_end_billed_tps": 10.0,
+                    "billed_output_tokens": 100,
                     "output_tokens": 100,
                 },
             ]
         )
         self.assertEqual(
-            aggregate["provider_window_output_tps_ratio_of_sums"],
+            aggregate["end_to_end_billed_tps_ratio_of_sums"],
             200 / 11,
         )
         self.assertNotEqual(
-            aggregate["provider_window_output_tps_ratio_of_sums"], 55.0
+            aggregate["end_to_end_billed_tps_ratio_of_sums"], 55.0
         )
 
     def test_heartbeat_runner_captures_output(self):

@@ -720,6 +720,21 @@ def main() -> int:
         help="Evaluate a run directory previously created with --skip-evaluation",
     )
     parser.add_argument("--keep-container", action="store_true")
+    parser.add_argument(
+        "--solve-timeout",
+        type=int,
+        default=3600,
+        help="Terminate a stuck Codex solve after this many seconds",
+    )
+    parser.add_argument(
+        "--codex-sandbox",
+        choices=["workspace-write", "danger-full-access"],
+        default="workspace-write",
+        help=(
+            "Codex host sandbox; use danger-full-access only when an outer "
+            "managed sandbox blocks nested sandbox-exec"
+        ),
+    )
     parser.add_argument("--evaluation-timeout", type=int, default=1800)
     args = parser.parse_args()
 
@@ -786,6 +801,7 @@ def main() -> int:
         "requested_model": args.model,
         "requested_reasoning_effort": args.reasoning,
         "requested_service_tier": args.service_tier,
+        "codex_sandbox": args.codex_sandbox,
         "resolved_model": None,
         "resolved_service_tier": None,
         "auth_mode": "chatgpt_saved_login",
@@ -910,7 +926,7 @@ def main() -> int:
             "--config",
             'web_search="disabled"',
             "--sandbox",
-            "workspace-write",
+            args.codex_sandbox,
             "--skip-git-repo-check",
             "--cd",
             str(worktree),
@@ -957,10 +973,7 @@ def main() -> int:
                         continue
                     trace["lifecycle_trace_index"] = len(lifecycle_traces) + 1
                     lifecycle_traces.append(trace)
-                    window_seconds = (
-                        trace["completed_unix_ns"]
-                        - trace["provider_event_started_unix_ns"]
-                    ) / 1_000_000_000
+                    request_seconds = trace["request_to_completed_ms"] / 1000
                     output_tokens = trace["output_tokens"]
                     print(
                         json.dumps(
@@ -970,11 +983,11 @@ def main() -> int:
                                 "model": trace["model"],
                                 "warmup": trace["warmup"],
                                 "provider_start_kind": trace["provider_start_kind"],
-                                "provider_window_seconds": round(window_seconds, 6),
+                                "end_to_end_inference_seconds": round(request_seconds, 6),
                                 "output_tokens": output_tokens,
-                                "provider_window_output_tps": (
-                                    round(output_tokens / window_seconds, 3)
-                                    if window_seconds > 0 else None
+                                "end_to_end_billed_tps": (
+                                    round(output_tokens / request_seconds, 3)
+                                    if request_seconds > 0 else None
                                 ),
                                 "note": "tool overlap is reconciled at query end",
                             }
@@ -1019,6 +1032,25 @@ def main() -> int:
                 target=emit_running_heartbeat, daemon=True
             )
             heartbeat_thread.start()
+            solve_watchdog_stop = threading.Event()
+            solve_timed_out = threading.Event()
+
+            def enforce_solve_timeout() -> None:
+                if solve_watchdog_stop.wait(args.solve_timeout):
+                    return
+                solve_timed_out.set()
+                print(
+                    f"[solve] timeout after {args.solve_timeout}s; terminating Codex",
+                    flush=True,
+                )
+                process.terminate()
+                if not solve_watchdog_stop.wait(15) and process.poll() is None:
+                    process.kill()
+
+            solve_watchdog = threading.Thread(
+                target=enforce_solve_timeout, daemon=True
+            )
+            solve_watchdog.start()
             for line in process.stdout:
                 jsonl_file.write(line)
                 jsonl_file.flush()
@@ -1056,6 +1088,8 @@ def main() -> int:
                 except json.JSONDecodeError:
                     print("[codex] non-JSON output", flush=True)
             codex_returncode = process.wait()
+            solve_watchdog_stop.set()
+            solve_watchdog.join(timeout=1)
             solve_end_ns = time.time_ns()
             solve_elapsed_seconds = time.monotonic() - solve_start
             heartbeat_stop.set()
@@ -1064,6 +1098,7 @@ def main() -> int:
         metadata["solve_ended_at"] = iso_now()
         metadata["solve_seconds"] = round(solve_elapsed_seconds, 3)
         metadata["codex_returncode"] = codex_returncode
+        metadata["solve_timed_out"] = solve_timed_out.is_set()
         metadata["codex"] = parse_codex_jsonl(jsonl_path)
         metadata["timing_breakdown"] = summarize_event_timeline(
             timeline_path, metadata["solve_seconds"]
@@ -1086,6 +1121,12 @@ def main() -> int:
         metadata["inference_timing"] = inference_timing
         metadata["timing_breakdown"].update(
             {
+                "end_to_end_inference_seconds": inference_timing[
+                    "end_to_end_inference_seconds"
+                ],
+                "end_to_end_billed_tps": inference_timing[
+                    "end_to_end_billed_tps"
+                ],
                 "provider_window_inference_seconds": inference_timing[
                     "provider_window_inference_seconds"
                 ],
@@ -1103,9 +1144,9 @@ def main() -> int:
             f"coverage={inference_timing['coverage']} "
             f"calls={inference_timing['primary_eligible_call_count']} "
             f"tokens={inference_timing['primary_output_tokens']} "
-            f"inference_s={inference_timing['provider_window_inference_seconds']:.6f} "
+            f"request_s={inference_timing['end_to_end_inference_seconds']:.6f} "
             f"tool_s={inference_timing['total_tool_seconds']:.6f} "
-            f"tps={inference_timing['provider_window_output_tps']}",
+            f"end_to_end_tps={inference_timing['end_to_end_billed_tps']}",
             flush=True,
         )
 
@@ -1124,7 +1165,13 @@ def main() -> int:
         predictions_path = output / "preds.jsonl"
         predictions_path.write_text(json.dumps(prediction) + "\n")
         write_json(output / "preds.json", {problem["instance_id"]: prediction})
-        metadata["status"] = "patch_captured" if patch.strip() and codex_returncode == 0 else "solve_failed"
+        metadata["status"] = (
+            "solve_failed"
+            if codex_returncode != 0 or solve_timed_out.is_set()
+            else "patch_captured"
+            if patch.strip()
+            else "completed_no_patch"
+        )
         metadata["inference_timing_complete"] = (
             inference_timing["coverage"] == "complete"
         )
@@ -1152,6 +1199,8 @@ def main() -> int:
         metadata["status"] = (
             "completed_with_incomplete_inference_timing"
             if timing_incomplete else "completed_without_evaluation"
+            if metadata["status"] == "patch_captured"
+            else "completed_without_evaluation_no_patch"
         )
         write_json(metadata_path, metadata)
         print(f"RUN_METADATA={metadata_path}")
