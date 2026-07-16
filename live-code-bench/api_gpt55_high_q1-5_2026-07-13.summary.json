@@ -1,0 +1,45 @@
+{
+  "endpoints": [
+    {
+      "endpoint_name": "api-gpt55-high-q1-5-20260713",
+      "provider": "openai",
+      "model": "gpt-5.5-koffing-castor-kosmo-0527-test-ev3",
+      "thinking_effort": "high",
+      "attempted_runs": 5,
+      "completed_runs": 5,
+      "outcomes": {
+        "completed": 5
+      },
+      "billed_output_tokens": 20626,
+      "reasoning_tokens": 17225,
+      "inference_time_s": 111.286543,
+      "completed_inference_time_s": 111.286543,
+      "completed_active_generation_time_s": 104.708194,
+      "active_generation_billed_tokens": 20626,
+      "active_generation_eligible_runs": 5,
+      "incomplete_billed_output_tokens": 0,
+      "tool_time_s": 0.0,
+      "retry_api_time_s": 0.0,
+      "backoff_time_s": 0.0,
+      "harness_overhead_s": 27.868857,
+      "total_wall_s": 139.155399,
+      "planned_runs": 5,
+      "skipped_attempts_exhausted": 0,
+      "missing_runs": 0,
+      "visible_output_tokens": 3401,
+      "end_to_end_billed_tps": 185.3413669251996,
+      "active_generation_billed_tps": 196.98553868668577,
+      "averages_per_attempted_run": {
+        "billed_output_tokens": 4125.2,
+        "inference_time_s": 22.257308599999998,
+        "tool_time_s": 0.0,
+        "retry_api_time_s": 0.0,
+        "backoff_time_s": 0.0,
+        "harness_overhead_s": 5.5737714,
+        "total_wall_s": 27.831079799999998,
+        "reasoning_tokens": 3445.0,
+        "visible_output_tokens": 680.2
+      }
+    }
+  ]
+}

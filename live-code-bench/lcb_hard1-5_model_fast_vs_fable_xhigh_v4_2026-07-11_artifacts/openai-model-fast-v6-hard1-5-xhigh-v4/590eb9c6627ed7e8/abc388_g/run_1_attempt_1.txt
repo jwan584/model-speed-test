@@ -1,0 +1,76 @@
+```python
+import sys
+
+
+def main():
+    input = sys.stdin.buffer.readline
+
+    n = int(input())
+    a = list(map(int, input().split()))
+
+    # next_pos[i] is the first index j such that A[j] >= 2 * A[i].
+    # Store next_pos[i] - i.
+    distance = [0] * n
+    j = 0
+    for i in range(n):
+        if j < i + 1:
+            j = i + 1
+        target = 2 * a[i]
+        while j < n and a[j] < target:
+            j += 1
+        distance[i] = j - i
+
+    # Sparse table for range maximum queries on distance.
+    sparse = [distance]
+    span = 1
+    while span * 2 <= n:
+        previous = sparse[-1]
+        length = n - 2 * span + 1
+        current = [
+            previous[i]
+            if previous[i] >= previous[i + span]
+            else previous[i + span]
+            for i in range(length)
+        ]
+        sparse.append(current)
+        span *= 2
+
+    def range_max(left, right):
+        """Maximum on [left, right)."""
+        length = right - left
+        level = length.bit_length() - 1
+        width = 1 << level
+        row = sparse[level]
+        x = row[left]
+        y = row[right - width]
+        return x if x >= y else y
+
+    q = int(input())
+    answers = []
+
+    for _ in range(q):
+        left, right = map(int, input().split())
+        left -= 1
+        # right is already the exclusive endpoint in zero-based indexing.
+        length = right - left
+
+        low = 0
+        high = length // 2 + 1
+
+        while high - low > 1:
+            pairs = (low + high) // 2
+            maximum_distance = range_max(left, left + pairs)
+
+            if maximum_distance <= length - pairs:
+                low = pairs
+            else:
+                high = pairs
+
+        answers.append(str(low))
+
+    sys.stdout.write("\n".join(answers))
+
+
+if __name__ == "__main__":
+    main()
+```

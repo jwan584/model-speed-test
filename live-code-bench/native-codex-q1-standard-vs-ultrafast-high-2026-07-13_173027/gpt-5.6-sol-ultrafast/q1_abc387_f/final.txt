@@ -1,0 +1,7 @@
+Implemented the complete \(O(NM)\) solution in [solution.py](/Users/james/Library/Mobile%20Documents/com~apple~CloudDocs/Code/live-code-bench/LiveCodeBench/native-codex-q1-standard-vs-ultrafast-high-2026-07-13_173027/gpt-5.6-sol-ultrafast/q1_abc387_f/solution.py).
+
+Validated with:
+
+- All three samples
+- Thousands of exhaustive/random brute-force cases
+- Maximum-size stress test (`N = M = 2025`) in approximately 0.28 seconds

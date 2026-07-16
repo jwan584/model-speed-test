@@ -1,0 +1,96 @@
+```python
+import sys
+
+
+def solve():
+    data = list(map(int, sys.stdin.buffer.read().split()))
+    pos = 0
+
+    n = data[pos]
+    pos += 1
+    a = data[pos:pos + n]
+    pos += n
+
+    # dist[i] is the minimum distance to an index j such that
+    # a[j] >= 2 * a[i].
+    dist = [n + 1] * n
+    j = 0
+    for i in range(n):
+        if j <= i:
+            j = i + 1
+        target = 2 * a[i]
+        while j < n and a[j] < target:
+            j += 1
+        if j < n:
+            dist[i] = j - i
+
+    # Range maximum segment tree over dist.
+    size = 1
+    while size < n:
+        size <<= 1
+
+    seg = [0] * (2 * size)
+    seg[size:size + n] = dist
+    for i in range(size - 1, 0, -1):
+        left = seg[i << 1]
+        right = seg[i << 1 | 1]
+        seg[i] = left if left >= right else right
+
+    def query_answer(left, length):
+        max_pairs = length // 2
+
+        node = left + size
+        used = 0
+        maximum = 0
+
+        while True:
+            while node % 2 == 0:
+                node >>= 1
+
+            block_length = size >> (node.bit_length() - 1)
+            node_max = seg[node]
+            combined_max = maximum if maximum >= node_max else node_max
+            combined_used = used + block_length
+
+            if combined_used > max_pairs or combined_max + combined_used > length:
+                while node < size:
+                    node <<= 1
+                    block_length >>= 1
+
+                    node_max = seg[node]
+                    combined_max = maximum if maximum >= node_max else node_max
+                    combined_used = used + block_length
+
+                    if (combined_used <= max_pairs and
+                            combined_max + combined_used <= length):
+                        maximum = combined_max
+                        used = combined_used
+                        node += 1
+
+                return used
+
+            maximum = combined_max
+            used = combined_used
+            node += 1
+
+            if node & -node == node:
+                return used
+
+    q = data[pos]
+    pos += 1
+    answers = []
+
+    for _ in range(q):
+        left = data[pos] - 1
+        right = data[pos + 1] - 1
+        pos += 2
+
+        length = right - left + 1
+        answers.append(str(query_answer(left, length)))
+
+    sys.stdout.write("\n".join(answers))
+
+
+if __name__ == "__main__":
+    solve()
+```

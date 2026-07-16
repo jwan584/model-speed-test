@@ -1,0 +1,75 @@
+```python
+import sys
+from collections import deque
+from array import array
+
+MOD = 998244353
+
+
+def main():
+    input = sys.stdin.buffer.readline
+
+    N, M = map(int, input().split())
+    A = [x - 1 for x in map(int, input().split())]
+
+    indegree = [0] * N
+    for parent in A:
+        indegree[parent] += 1
+
+    template = array('I', [1]) * M
+    dp = [template[:] for _ in range(N)]
+
+    queue = deque(i for i in range(N) if indegree[i] == 0)
+
+    # Remove all non-cycle vertices, propagating their subtree DP
+    # to their parent.
+    while queue:
+        u = queue.popleft()
+        parent = A[u]
+
+        child_dp = dp[u]
+        parent_dp = dp[parent]
+
+        prefix_sum = 0
+        for value in range(M):
+            prefix_sum += child_dp[value]
+            if prefix_sum >= MOD:
+                prefix_sum -= MOD
+            parent_dp[value] = parent_dp[value] * prefix_sum % MOD
+
+        dp[u] = None
+        indegree[parent] -= 1
+        if indegree[parent] == 0:
+            queue.append(parent)
+
+    # The remaining vertices form disjoint directed cycles.
+    # All values on one cycle must be equal.
+    visited = [False] * N
+    answer = 1
+
+    for start in range(N):
+        if indegree[start] == 0 or visited[start]:
+            continue
+
+        cycle = []
+        u = start
+        while not visited[u]:
+            visited[u] = True
+            cycle.append(u)
+            u = A[u]
+
+        products = list(dp[cycle[0]])
+        for u in cycle[1:]:
+            row = dp[u]
+            for value in range(M):
+                products[value] = products[value] * row[value] % MOD
+
+        component_ways = sum(products) % MOD
+        answer = answer * component_ways % MOD
+
+    print(answer)
+
+
+if __name__ == "__main__":
+    main()
+```

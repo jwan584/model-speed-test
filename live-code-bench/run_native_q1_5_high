@@ -1,0 +1,35 @@
+#!/bin/zsh
+set -euo pipefail
+
+SCRIPT_DIR=${0:A:h}
+CODEX_BIN=${CODEX_INSTRUMENTED_BIN:-"$SCRIPT_DIR/.codex-instrumented/codex-v0.144.3"}
+MODEL=${CODEX_NATIVE_MODEL:-gpt-5.6-sol-ultrafast}
+DATASET_ARROW=${LCB_DATASET_ARROW:-"$SCRIPT_DIR/.cache/huggingface/datasets/json/default-10ec4e36e1321bad/0.0.0/f4e89e8750d5d5ffbef2c078bf0ddfedef29dc2faff52a6255cf513c05eb1092/json-train.arrow"}
+OUTPUT_DIR=${1:-"$SCRIPT_DIR/native-codex-${MODEL}-high-q1-5-$(date +%Y-%m-%d_%H%M%S)"}
+
+if [[ ! -x "$CODEX_BIN" ]]; then
+  print -u2 "Missing prebuilt instrumented Codex binary: $CODEX_BIN"
+  print -u2 "Build it once with: $SCRIPT_DIR/build_instrumented_codex"
+  exit 1
+fi
+
+if [[ ! -f "$DATASET_ARROW" ]]; then
+  print -u2 "Missing pinned LiveCodeBench dataset: $DATASET_ARROW"
+  exit 1
+fi
+
+export HF_HOME=${HF_HOME:-"$SCRIPT_DIR/.cache/huggingface"}
+export XDG_CACHE_HOME=${XDG_CACHE_HOME:-"$SCRIPT_DIR/.cache"}
+export LCB_DATASET_ARROW="$DATASET_ARROW"
+export LCB_DATASET_ARROW_RELEASE=release_v6
+
+exec "$SCRIPT_DIR/run_codex_native_benchmark" \
+  --timing-mode micro \
+  --codex-bin "$CODEX_BIN" \
+  --model "$MODEL" \
+  --reasoning high \
+  --problems hard:1 hard:2 hard:3 hard:4 hard:5 \
+  --release release_v6 \
+  --timeout-seconds 3600 \
+  --checker-timeout 12 \
+  --output-dir "$OUTPUT_DIR"

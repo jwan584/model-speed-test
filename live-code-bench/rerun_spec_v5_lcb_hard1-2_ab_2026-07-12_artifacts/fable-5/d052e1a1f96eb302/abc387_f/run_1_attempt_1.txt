@@ -1,0 +1,83 @@
+Looking at this problem:
+
+- Each node `i` has an edge to `A_i` with constraint `x_i ≤ x_{A_i}`. This forms a functional graph (each component has exactly one cycle with trees hanging off it).
+- On a cycle, the chain of inequalities `x_i ≤ x_{A_i} ≤ ... ≤ x_i` forces all cycle values to be equal — so contract each cycle into a single root node.
+- For trees rooted at the cycle: standard tree DP where `f_v(t)` = number of ways for subtree of `v` with `x_v = t`, giving `f_v(t) = ∏_{child c} (prefix sum of f_c up to t)`.
+- Component answer = sum over `t` of the root's product; total answer = product over components.
+
+With N, M ≤ 2025, this is O(N·M) which is fine (numpy speeds up the elementwise operations; int64 is safe since MOD² < 2⁶³).
+
+Verified on samples:
+- Sample 1: cycle {1,2}, node 3 child → f_root = [1,2,3], sum 6 ✓
+- Sample 2: self-loop with 3 children → Σt³ for t=1..9 = 2025 ✓
+
+```python
+import sys
+import numpy as np
+from collections import deque
+
+def main():
+    data = sys.stdin.buffer.read().split()
+    N = int(data[0]); M = int(data[1])
+    A = [int(x) - 1 for x in data[2:2 + N]]
+    MOD = 998244353
+
+    # find nodes on cycles by peeling indegree-0 nodes
+    indeg = [0] * N
+    for i in range(N):
+        indeg[A[i]] += 1
+    q = deque(i for i in range(N) if indeg[i] == 0)
+    removed = [False] * N
+    while q:
+        u = q.popleft()
+        removed[u] = True
+        v = A[u]
+        indeg[v] -= 1
+        if indeg[v] == 0:
+            q.append(v)
+
+    # tree children (non-cycle nodes point to their parent A[i])
+    children = [[] for _ in range(N)]
+    for i in range(N):
+        if removed[i]:
+            children[A[i]].append(i)
+
+    g = [None] * N  # g[v][t] = sum_{s<=t} f_v(s)
+
+    def solve_tree(root):
+        stack = [(root, False)]
+        while stack:
+            node, processed = stack.pop()
+            if processed:
+                f = np.ones(M, dtype=np.int64)
+                for c in children[node]:
+                    f = f * g[c] % MOD
+                    g[c] = None
+                # prefix sums: values < MOD, M <= 2025 so cumsum fits in int64
+                g[node] = np.cumsum(f) % MOD
+            else:
+                stack.append((node, True))
+                for c in children[node]:
+                    stack.append((c, False))
+
+    ans = 1
+    visited = [False] * N
+    for i in range(N):
+        if not removed[i] and not visited[i]:
+            # walk the cycle, contract it: multiply g of all children of cycle nodes
+            cur = i
+            f = np.ones(M, dtype=np.int64)
+            while not visited[cur]:
+                visited[cur] = True
+                for c in children[cur]:
+                    solve_tree(c)
+                    f = f * g[c] % MOD
+                    g[c] = None
+                cur = A[cur]
+            comp = int(f.sum() % MOD)
+            ans = ans * comp % MOD
+
+    print(ans % MOD)
+
+main()
+```

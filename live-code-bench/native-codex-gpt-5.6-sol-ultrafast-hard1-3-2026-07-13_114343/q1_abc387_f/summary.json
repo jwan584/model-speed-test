@@ -1,0 +1,39 @@
+{
+  "started_at": "2026-07-13T18:43:45.903740+00:00",
+  "cohort": "native_codex_cli",
+  "model": "gpt-5.6-sol-ultrafast",
+  "reasoning_effort": "xhigh",
+  "problem_number": 1,
+  "problem_id": "abc387_f",
+  "title": "Count Arrays",
+  "returncode": 0,
+  "timed_out": false,
+  "usage": {
+    "input_tokens": 178543,
+    "cached_input_tokens": 151936,
+    "output_tokens": 6833,
+    "reasoning_output_tokens": 4453
+  },
+  "first_codex_item_s": 0.43394637492019683,
+  "agent_wall_s": 57.36891816696152,
+  "agent_end_to_end_output_tps": 119.10630735817311,
+  "otel": {
+    "event_count": 75,
+    "api_request_seconds": null,
+    "responses_api_inference_seconds": null,
+    "sse_active_windows": [],
+    "sse_active_seconds": null,
+    "sse_boundary_confidence": "unavailable",
+    "scrutable_active_generation_seconds": null,
+    "metric_sums": {}
+  },
+  "codex_reported_inference_output_tps": null,
+  "sse_event_window_output_tps_diagnostic": null,
+  "active_generation_output_tps": null,
+  "active_generation_eligibility": "unavailable_until_reasoning_item_type_is_scrutable",
+  "solution_path": "/Users/james/Library/Mobile Documents/com~apple~CloudDocs/Code/live-code-bench/LiveCodeBench/native-codex-gpt-5.6-sol-ultrafast-hard1-3-2026-07-13_114343/q1_abc387_f/solution.py",
+  "jsonl_path": "/Users/james/Library/Mobile Documents/com~apple~CloudDocs/Code/live-code-bench/LiveCodeBench/native-codex-gpt-5.6-sol-ultrafast-hard1-3-2026-07-13_114343/q1_abc387_f/codex-events.jsonl",
+  "otel_path": "/Users/james/Library/Mobile Documents/com~apple~CloudDocs/Code/live-code-bench/LiveCodeBench/native-codex-gpt-5.6-sol-ultrafast-hard1-3-2026-07-13_114343/q1_abc387_f/otel-events.jsonl",
+  "stderr_tail": "",
+  "passed": false
+}

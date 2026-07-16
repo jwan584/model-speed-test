@@ -1,0 +1,8 @@
+Implemented the complete solution in [solution.py](/Users/james/Library/Mobile%20Documents/com~apple~CloudDocs/Code/live-code-bench/LiveCodeBench/native-codex-gpt-5.6-sol-ultrafast-high-q1-5-2026-07-13_145017/q1_abc387_f/solution.py).
+
+It uses functional-graph cycle decomposition and tree DP:
+
+- Time: \(O(NM)\)
+- Memory: \(O(NM)\) worst case, using compact integer arrays
+
+Validated against all samples, randomized brute-force cases, and maximum-size inputs.

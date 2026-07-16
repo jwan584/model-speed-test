@@ -1,0 +1,27 @@
+```python
+import sys
+
+
+def main():
+    input = sys.stdin.readline
+
+    n = int(input())
+    a = list(map(int, input().split()))
+
+    small = 0
+    large = n // 2
+    max_small = n // 2
+    pairs = 0
+
+    while small < max_small and large < n:
+        if 2 * a[small] <= a[large]:
+            pairs += 1
+            small += 1
+        large += 1
+
+    print(pairs)
+
+
+if __name__ == "__main__":
+    main()
+```

@@ -1,0 +1,148 @@
+#!/bin/zsh
+set -u
+set -o pipefail
+
+SCRIPT_DIR=${0:A:h}
+CODEX_BIN=${CODEX_INSTRUMENTED_BIN:-"$SCRIPT_DIR/.codex-instrumented/codex-v0.144.3"}
+REASONING=${REASONING:-high}
+STAMP=$(date +%Y-%m-%d_%H%M%S)
+OUTPUT_ROOT=${1:-"$SCRIPT_DIR/native-codex-q1-standard-vs-ultrafast-$REASONING-$STAMP"}
+DATASET_ARROW=${LCB_DATASET_ARROW:-"$SCRIPT_DIR/.cache/huggingface/datasets/json/default-10ec4e36e1321bad/0.0.0/f4e89e8750d5d5ffbef2c078bf0ddfedef29dc2faff52a6255cf513c05eb1092/json-train.arrow"}
+MODELS=(gpt-5.6-sol gpt-5.6-sol-ultrafast)
+
+if [[ ! -x "$CODEX_BIN" ]]; then
+  print -u2 "Instrumented Codex binary not found: $CODEX_BIN"
+  exit 1
+fi
+if [[ ! -f "$DATASET_ARROW" ]]; then
+  print -u2 "Pinned LiveCodeBench dataset not found: $DATASET_ARROW"
+  exit 1
+fi
+
+export HF_HOME=${HF_HOME:-"$SCRIPT_DIR/.cache/huggingface"}
+export XDG_CACHE_HOME=${XDG_CACHE_HOME:-"$SCRIPT_DIR/.cache"}
+export LCB_DATASET_ARROW="$DATASET_ARROW"
+export LCB_DATASET_ARROW_RELEASE=release_v6
+
+mkdir -p "$OUTPUT_ROOT"
+overall_status=0
+
+for model in $MODELS; do
+  output_dir="$OUTPUT_ROOT/$model"
+  mkdir -p "$output_dir"
+  print "[comparison] problem=LCB-Q1 model=$model reasoning=$REASONING output=$output_dir"
+  "$SCRIPT_DIR/run_codex_native_benchmark" \
+    --timing-mode micro \
+    --codex-bin "$CODEX_BIN" \
+    --model "$model" \
+    --reasoning "$REASONING" \
+    --problems hard:1 \
+    --release release_v6 \
+    --timeout-seconds 3600 \
+    --checker-timeout 12 \
+    --output-dir "$output_dir" \
+    2>&1 | tee "$output_dir/console.log"
+  run_status=$pipestatus[1]
+  if (( run_status != 0 )); then
+    overall_status=$run_status
+    print -u2 "[comparison] $model exited with status $run_status; continuing"
+  fi
+done
+
+"$SCRIPT_DIR/.venv/bin/python" - "$OUTPUT_ROOT" "$REASONING" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1]).resolve()
+reasoning = sys.argv[2]
+models = ("gpt-5.6-sol", "gpt-5.6-sol-ultrafast")
+rows = []
+for model in models:
+    path = root / model / "summary.json"
+    if not path.exists():
+        rows.append({"model": model, "error": "summary_missing"})
+        continue
+    summary = json.loads(path.read_text())
+    run = summary["runs"][0]
+    timing = run["inference_calls"]
+    rows.append(
+        {
+            "model": model,
+            "passed": run.get("passed"),
+            "checker_scope": run.get("checker_scope"),
+            "coverage": timing.get("primary_coverage"),
+            "output_token_reconciliation": timing.get(
+                "output_token_reconciliation"
+            ),
+            "target_micro_sessions": timing.get(
+                "primary_eligible_call_count"
+            ),
+            "target_output_tokens": timing.get("primary_output_tokens"),
+            "target_provider_response_seconds": timing.get(
+                "primary_provider_window_inference_seconds"
+            ),
+            "provider_lifecycle_output_tps": timing.get(
+                "primary_provider_window_output_tps"
+            ),
+            "all_model_provider_response_union_seconds": timing.get(
+                "total_all_models_provider_window_inference_seconds"
+            ),
+            "tool_union_seconds": timing.get("total_tool_seconds"),
+            "provider_tool_overlap_seconds": timing.get(
+                "inference_tool_concurrency_seconds"
+            ),
+            "orchestration_residual_seconds": timing.get(
+                "total_unattributed_seconds"
+            ),
+            "total_wall_seconds": timing.get("total_wall_seconds"),
+            "server_engine_equivalent": timing.get(
+                "server_engine_equivalent"
+            ),
+        }
+    )
+
+valid = {
+    row["model"]: row
+    for row in rows
+    if isinstance(row.get("provider_lifecycle_output_tps"), (int, float))
+}
+comparison = None
+if len(valid) == 2:
+    standard = valid[models[0]]
+    ultrafast = valid[models[1]]
+
+    def ratio(field):
+        base = standard.get(field)
+        fast = ultrafast.get(field)
+        return fast / base if base and isinstance(fast, (int, float)) else None
+
+    comparison = {
+        "ultrafast_over_standard_provider_lifecycle_tps": ratio(
+            "provider_lifecycle_output_tps"
+        ),
+        "ultrafast_over_standard_target_provider_response_time": ratio(
+            "target_provider_response_seconds"
+        ),
+        "ultrafast_over_standard_tool_time": ratio("tool_union_seconds"),
+        "ultrafast_over_standard_total_wall_time": ratio(
+            "total_wall_seconds"
+        ),
+    }
+
+result = {
+    "problem": "LiveCodeBench release_v6 hard Q1 (abc387_f)",
+    "method": "native Codex exec; response.created-to-response.completed provider lifecycle windows",
+    "server_engine_equivalent": False,
+    "reasoning_effort": reasoning,
+    "runs_per_model": 1,
+    "rows": rows,
+    "comparison": comparison,
+    "output_root": str(root),
+}
+(root / "comparison.json").write_text(json.dumps(result, indent=2) + "\n")
+print(json.dumps(result, indent=2))
+PY
+
+print "[comparison] result=$OUTPUT_ROOT/comparison.json"
+exit $overall_status

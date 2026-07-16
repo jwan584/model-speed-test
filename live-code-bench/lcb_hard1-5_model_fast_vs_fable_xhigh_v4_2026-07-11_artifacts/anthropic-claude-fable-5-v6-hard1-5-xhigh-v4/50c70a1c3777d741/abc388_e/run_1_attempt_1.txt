@@ -1,0 +1,27 @@
+```python
+import sys
+
+def main():
+    data = sys.stdin.buffer.read().split()
+    n = int(data[0])
+    A = list(map(int, data[1:1+n]))
+    
+    def ok(k):
+        # pair smallest k with largest k
+        for i in range(k):
+            if 2 * A[i] > A[n - k + i]:
+                return False
+        return True
+    
+    lo, hi = 0, n // 2
+    # binary search for maximum feasible k
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if ok(mid):
+            lo = mid
+        else:
+            hi = mid - 1
+    print(lo)
+
+main()
+```

@@ -1,0 +1,10 @@
+Implemented the complete solution in [solution.py](/Users/james/Library/Mobile%20Documents/com~apple~CloudDocs/Code/live-code-bench/LiveCodeBench/native-codex-gpt-5.6-sol-ultrafast-hard1-3-2026-07-13_114343/q2_abc388_g/solution.py).
+
+Verified with:
+
+- Both sample cases
+- Randomized exhaustive comparisons
+- Maximum-size performance test: 0.74 seconds
+- Python compilation check
+
+Complexity: \(O((N+Q)\log N)\) time and \(O(N\log N)\) memory.

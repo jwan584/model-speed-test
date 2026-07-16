@@ -1,0 +1,86 @@
+{
+  "endpoints": [
+    {
+      "endpoint_name": "model_fast",
+      "provider": "openai",
+      "model": "gpt-5.5-koffing-castor-kosmo-0527-test-ev3",
+      "thinking_effort": "xhigh",
+      "attempted_runs": 2,
+      "completed_runs": 2,
+      "outcomes": {
+        "completed": 2
+      },
+      "billed_output_tokens": 37006,
+      "reasoning_tokens": 12261,
+      "inference_time_s": 114.053068,
+      "completed_inference_time_s": 114.053068,
+      "completed_active_generation_time_s": 110.52788699999999,
+      "active_generation_billed_tokens": 37006,
+      "active_generation_eligible_runs": 2,
+      "incomplete_billed_output_tokens": 0,
+      "tool_time_s": 0.0,
+      "retry_api_time_s": 0.0,
+      "backoff_time_s": 0.0,
+      "harness_overhead_s": 5.723899,
+      "total_wall_s": 119.77696700000001,
+      "planned_runs": 2,
+      "skipped_attempts_exhausted": 0,
+      "missing_runs": 0,
+      "visible_output_tokens": 24745,
+      "end_to_end_billed_tps": 324.46299471751166,
+      "active_generation_billed_tps": 334.8114308925493,
+      "averages_per_attempted_run": {
+        "billed_output_tokens": 18503.0,
+        "inference_time_s": 57.026534,
+        "tool_time_s": 0.0,
+        "retry_api_time_s": 0.0,
+        "backoff_time_s": 0.0,
+        "harness_overhead_s": 2.8619495,
+        "total_wall_s": 59.88848350000001,
+        "reasoning_tokens": 6130.5,
+        "visible_output_tokens": 12372.5
+      }
+    },
+    {
+      "endpoint_name": "fable-5",
+      "provider": "anthropic",
+      "model": "claude-fable-5",
+      "thinking_effort": "xhigh",
+      "attempted_runs": 2,
+      "completed_runs": 2,
+      "outcomes": {
+        "completed": 2
+      },
+      "billed_output_tokens": 50347,
+      "reasoning_tokens": null,
+      "inference_time_s": 561.740933,
+      "completed_inference_time_s": 561.740933,
+      "completed_active_generation_time_s": 552.974652,
+      "active_generation_billed_tokens": 50347,
+      "active_generation_eligible_runs": 2,
+      "incomplete_billed_output_tokens": 0,
+      "tool_time_s": 0.0,
+      "retry_api_time_s": 0.0,
+      "backoff_time_s": 0.0,
+      "harness_overhead_s": 6.5966190000000005,
+      "total_wall_s": 568.337552,
+      "planned_runs": 2,
+      "skipped_attempts_exhausted": 0,
+      "missing_runs": 0,
+      "visible_output_tokens": null,
+      "end_to_end_billed_tps": 89.62672478062053,
+      "active_generation_billed_tps": 91.04757300882574,
+      "averages_per_attempted_run": {
+        "billed_output_tokens": 25173.5,
+        "inference_time_s": 280.8704665,
+        "tool_time_s": 0.0,
+        "retry_api_time_s": 0.0,
+        "backoff_time_s": 0.0,
+        "harness_overhead_s": 3.2983095000000002,
+        "total_wall_s": 284.168776,
+        "reasoning_tokens": null,
+        "visible_output_tokens": null
+      }
+    }
+  ]
+}

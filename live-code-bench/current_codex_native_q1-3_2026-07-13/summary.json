@@ -1,0 +1,32 @@
+{
+  "cohort": "current Codex model; native conversation agent turn",
+  "timer_start_utc": "2026-07-13T17:29:06.131400000Z",
+  "solutions_written_by_utc": "2026-07-13T17:30:21.893696000Z",
+  "timer_end_utc": "2026-07-13T17:34:34.043230000Z",
+  "solve_and_write_wall_s": 75.762296,
+  "full_agent_and_validation_wall_s": 327.91183,
+  "usage_observability": "The conversation runtime does not expose internal input, output, or reasoning token counts.",
+  "runs": [
+    {
+      "question": 1,
+      "problem_id": "abc387_f",
+      "passed": true,
+      "checker_wall_s": 9.399954417021945,
+      "solution": "current_codex_native_q1-3_2026-07-13/q1_abc387_f/solution.py"
+    },
+    {
+      "question": 2,
+      "problem_id": "abc388_g",
+      "passed": true,
+      "checker_wall_s": 4.475714583997615,
+      "solution": "current_codex_native_q1-3_2026-07-13/q2_abc388_g/solution.py"
+    },
+    {
+      "question": 3,
+      "problem_id": "abc388_f",
+      "passed": true,
+      "checker_wall_s": 4.771081874961965,
+      "solution": "current_codex_native_q1-3_2026-07-13/q3_abc388_f/solution.py"
+    }
+  ]
+}

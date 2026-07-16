@@ -1,0 +1,78 @@
+{
+  "endpoints": [
+    {
+      "endpoint_name": "openai-model-fast-v6-hard1-5-xhigh-v4",
+      "provider": "openai",
+      "model": "gpt-5.5-koffing-castor-kosmo-0527-test-ev3",
+      "thinking_effort": "xhigh",
+      "attempted_runs": 5,
+      "completed_runs": 5,
+      "outcomes": {
+        "completed": 5
+      },
+      "billed_output_tokens": 19815,
+      "reasoning_tokens": 16641,
+      "inference_time_s": 94.37376599999999,
+      "completed_inference_time_s": 94.37376599999999,
+      "incomplete_billed_output_tokens": 0,
+      "tool_time_s": 0.0,
+      "retry_api_time_s": 0.0,
+      "backoff_time_s": 0.0,
+      "harness_overhead_s": 24.337107999999997,
+      "total_wall_s": 118.710872,
+      "planned_runs": 5,
+      "skipped_attempts_exhausted": 0,
+      "missing_runs": 0,
+      "visible_output_tokens": 3174,
+      "billed_output_tokens_per_second": 209.96301027130784,
+      "averages_per_attempted_run": {
+        "billed_output_tokens": 3963.0,
+        "inference_time_s": 18.874753199999997,
+        "tool_time_s": 0.0,
+        "retry_api_time_s": 0.0,
+        "backoff_time_s": 0.0,
+        "harness_overhead_s": 4.867421599999999,
+        "total_wall_s": 23.7421744,
+        "reasoning_tokens": 3328.2,
+        "visible_output_tokens": 634.8
+      }
+    },
+    {
+      "endpoint_name": "anthropic-claude-fable-5-v6-hard1-5-xhigh-v4",
+      "provider": "anthropic",
+      "model": "claude-fable-5",
+      "thinking_effort": "xhigh",
+      "attempted_runs": 5,
+      "completed_runs": 5,
+      "outcomes": {
+        "completed": 5
+      },
+      "billed_output_tokens": 61083,
+      "reasoning_tokens": null,
+      "inference_time_s": 773.808595,
+      "completed_inference_time_s": 773.808595,
+      "incomplete_billed_output_tokens": 0,
+      "tool_time_s": 0.0,
+      "retry_api_time_s": 0.0,
+      "backoff_time_s": 0.0,
+      "harness_overhead_s": 22.275691000000002,
+      "total_wall_s": 796.0842849999999,
+      "planned_runs": 5,
+      "skipped_attempts_exhausted": 0,
+      "missing_runs": 0,
+      "visible_output_tokens": null,
+      "billed_output_tokens_per_second": 78.93812551927005,
+      "averages_per_attempted_run": {
+        "billed_output_tokens": 12216.6,
+        "inference_time_s": 154.761719,
+        "tool_time_s": 0.0,
+        "retry_api_time_s": 0.0,
+        "backoff_time_s": 0.0,
+        "harness_overhead_s": 4.4551382,
+        "total_wall_s": 159.21685699999998,
+        "reasoning_tokens": null,
+        "visible_output_tokens": null
+      }
+    }
+  ]
+}

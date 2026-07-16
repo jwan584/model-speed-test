@@ -1,0 +1,7 @@
+Implemented the complete solution in [solution.py](/Users/james/Library/Mobile%20Documents/com~apple~CloudDocs/Code/live-code-bench/LiveCodeBench/native-codex-q1-standard-vs-ultrafast-high-2026-07-13_173027/gpt-5.6-sol/q1_abc387_f/solution.py).
+
+- Time: \(O(NM)\)
+- Memory: \(O(NM)\)
+- All samples passed.
+- Passed 120 randomized brute-force comparisons.
+- Maximum-size performance test passed.

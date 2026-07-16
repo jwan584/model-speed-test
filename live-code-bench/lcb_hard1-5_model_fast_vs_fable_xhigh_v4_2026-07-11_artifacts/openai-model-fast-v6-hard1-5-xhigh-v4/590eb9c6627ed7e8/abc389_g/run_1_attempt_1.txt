@@ -1,0 +1,165 @@
+```python
+import sys
+
+
+def main():
+    n, mod = map(int, sys.stdin.buffer.readline().split())
+
+    half = n // 2
+    max_edges = n * (n - 1) // 2
+    size = half + 1
+
+    # Factorials and inverse factorials modulo mod.
+    fact = [1] * (n + 1)
+    for i in range(1, n + 1):
+        fact[i] = fact[i - 1] * i % mod
+
+    inv_fact = [1] * (n + 1)
+    inv_fact[n] = pow(fact[n], mod - 2, mod)
+    for i in range(n, 0, -1):
+        inv_fact[i - 1] = inv_fact[i] * i % mod
+
+    label_factor = fact[n - 1]
+
+    def evaluate(x):
+        """
+        Evaluates the edge-count generating polynomial at x.
+        A graph is represented by its BFS layers from vertex 1.
+        """
+        if x == 0:
+            return 0
+
+        q = (x + 1) % mod
+
+        q_power = [1] * size
+        for a in range(1, size):
+            q_power[a] = q_power[a - 1] * q % mod
+
+        # internal[b] accounts for arbitrary edges inside a layer of size b,
+        # together with the 1 / b! factor for choosing its labels.
+        internal = [0] * size
+        for b in range(1, size):
+            internal[b] = (
+                pow(q, b * (b - 1) // 2, mod) * inv_fact[b]
+            ) % mod
+
+        # weight[a][b]:
+        # previous layer has size a, new layer has size b.
+        # Every vertex in the new layer must have a neighbor in the previous one.
+        weight = [[0] * size for _ in range(size)]
+        for a in range(1, size):
+            choices = (q_power[a] - 1) % mod
+            choices_power = 1
+            row = weight[a]
+            for b in range(1, size):
+                choices_power = choices_power * choices % mod
+                row[b] = choices_power * internal[b] % mod
+
+        # even[e][o][a]: current last layer has even distance and size a,
+        # and e/o vertices of each distance parity have been used.
+        even = [[[0] * size for _ in range(size)] for _ in range(size)]
+        odd = [[[0] * size for _ in range(size)] for _ in range(size)]
+
+        even[1][0][1] = 1  # Layer 0 consists only of vertex 1.
+
+        for e in range(1, size):
+            even_e = even[e]
+            odd_e = odd[e]
+
+            for o in range(size):
+                remaining_odd = half - o
+                if remaining_odd:
+                    current = even_e[o]
+                    for a in range(1, e + 1):
+                        value = current[a]
+                        if value == 0:
+                            continue
+                        row = weight[a]
+                        for b in range(1, remaining_odd + 1):
+                            target = odd_e[o + b]
+                            target[b] = (
+                                target[b] + value * row[b]
+                            ) % mod
+
+                remaining_even = half - e
+                if remaining_even and o:
+                    current = odd_e[o]
+                    for a in range(1, o + 1):
+                        value = current[a]
+                        if value == 0:
+                            continue
+                        row = weight[a]
+                        for b in range(1, remaining_even + 1):
+                            target = even[e + b][o]
+                            target[b] = (
+                                target[b] + value * row[b]
+                            ) % mod
+
+        result = (
+            sum(even[half][half]) + sum(odd[half][half])
+        ) % mod
+        return result * label_factor % mod
+
+    # Evaluate at 0, 1, ..., max_edges.
+    values = [evaluate(x) for x in range(max_edges + 1)]
+
+    # Compute forward differences:
+    # f(x) = sum_k delta[k] * binom(x, k).
+    differences = values[:]
+    deltas = []
+    active_length = max_edges + 1
+    for _ in range(max_edges + 1):
+        deltas.append(differences[0])
+        for i in range(active_length - 1):
+            differences[i] = (
+                differences[i + 1] - differences[i]
+            ) % mod
+        active_length -= 1
+
+    inverses = [0] * (max_edges + 1)
+    if max_edges >= 1:
+        inverses[1] = 1
+        for i in range(2, max_edges + 1):
+            inverses[i] = (
+                mod - (mod // i) * inverses[mod % i] % mod
+            )
+
+    # Convert from the binomial basis to the monomial basis.
+    coefficients = [0] * (max_edges + 1)
+    basis = [1]  # binom(x, 0)
+
+    for k in range(max_edges + 1):
+        delta = deltas[k]
+        if delta:
+            for j, value in enumerate(basis):
+                coefficients[j] = (
+                    coefficients[j] + delta * value
+                ) % mod
+
+        if k == max_edges:
+            break
+
+        # binom(x, k+1) = binom(x, k) * (x-k) / (k+1)
+        inv = inverses[k + 1]
+        new_basis = [0] * (k + 2)
+        new_basis[0] = (-k * basis[0] * inv) % mod
+
+        for j in range(1, k + 1):
+            new_basis[j] = (
+                (basis[j - 1] - k * basis[j]) * inv
+            ) % mod
+
+        new_basis[k + 1] = basis[k] * inv % mod
+        basis = new_basis
+
+    print(
+        " ".join(
+            str(coefficients[m])
+            for m in range(n - 1, max_edges + 1)
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()
+```

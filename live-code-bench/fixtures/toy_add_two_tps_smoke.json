@@ -1,0 +1,17 @@
+{
+  "question_title": "Add Two Integers",
+  "question_content": "Write a Python 3 program that reads two integers A and B from standard input and prints A + B.\n\nInput\nA B\n\nOutput\nPrint the sum.\n\nConstraints\n-10^9 <= A, B <= 10^9\n\nSample Input 1\n2 3\n\nSample Output 1\n5\n\nSample Input 2\n-7 4\n\nSample Output 2\n-3",
+  "platform": "atcoder",
+  "question_id": "toy_add_two_tps_smoke",
+  "contest_id": "toy",
+  "contest_date": "2026-07-13T00:00:00",
+  "starter_code": "",
+  "difficulty": "easy",
+  "public_test_cases": [
+    {"input": "2 3\n", "output": "5\n", "testtype": "stdin"},
+    {"input": "-7 4\n", "output": "-3\n", "testtype": "stdin"},
+    {"input": "1000000000 1000000000\n", "output": "2000000000\n", "testtype": "stdin"}
+  ],
+  "private_test_cases": [],
+  "metadata": {}
+}

@@ -1,0 +1,201 @@
+```python
+import sys
+import math
+
+
+def solve():
+    n, mod = map(int, sys.stdin.readline().split())
+    half = n // 2
+    H = half + 1
+
+    min_edges = n - 1
+    total_edges = n * (n - 1) // 2
+
+    # Every even-distance vertex other than vertex 1 is not adjacent to vertex 1.
+    max_edges = total_edges - (half - 1)
+
+    # After factoring out x^(N-1), this is the maximum remaining degree.
+    reduced_degree = max_edges - min_edges
+    evaluation_count = reduced_degree + 1
+
+    # State: (number of even-distance vertices used,
+    #         number of odd-distance vertices used,
+    #         size of the last layer,
+    #         parity of the last layer)
+    # parity: 0 = even, 1 = odd
+    states = [(1, 0, 1, 0)]
+    state_id = {(1, 0, 1, 0): 0}
+    by_size = [[] for _ in range(n + 1)]
+    by_size[1].append(0)
+    outgoing = [[]]
+
+    # A group stores (transition-polynomial index, label-choice factor).
+    group_id = {}
+    groups = []
+
+    for used in range(1, n):
+        for src in by_size[used]:
+            even_used, odd_used, previous_size, parity = states[src]
+
+            if parity == 0:
+                limit = half - odd_used
+            else:
+                limit = half - even_used
+
+            for new_size in range(1, limit + 1):
+                if parity == 0:
+                    ne = even_used
+                    no = odd_used + new_size
+                    np = 1
+                else:
+                    ne = even_used + new_size
+                    no = odd_used
+                    np = 0
+
+                new_used = used + new_size
+                if new_used > n:
+                    break
+
+                # Such a state cannot be extended to the required final totals.
+                if np == 1 and ne == half and no < half:
+                    continue
+                if np == 0 and no == half and ne < half:
+                    continue
+
+                key = (ne, no, new_size, np)
+                dst = state_id.get(key)
+                if dst is None:
+                    dst = len(states)
+                    state_id[key] = dst
+                    states.append(key)
+                    outgoing.append([])
+                    by_size[new_used].append(dst)
+
+                gkey = (used, previous_size, new_size)
+                gid = group_id.get(gkey)
+                if gid is None:
+                    gid = len(groups)
+                    group_id[gkey] = gid
+                    choose_factor = math.comb(n - used, new_size) % mod
+                    polynomial_index = previous_size * H + new_size
+                    groups.append((polynomial_index, choose_factor))
+
+                outgoing[src].append((dst, gid))
+
+    processing_order = []
+    for used in range(1, n + 1):
+        processing_order.extend(by_size[used])
+
+    terminal_states = [
+        i for i, (e, o, _, _) in enumerate(states)
+        if e == half and o == half
+    ]
+
+    # Modular inverses for interpolation points and factorial-like factors.
+    max_inverse = max(evaluation_count, 1)
+    inverses = [0] * (max_inverse + 1)
+    if max_inverse >= 1:
+        inverses[1] = 1
+        for i in range(2, max_inverse + 1):
+            inverses[i] = mod - (mod // i) * inverses[mod % i] % mod
+
+    values = []
+
+    max_base_power = max(half, half * (half - 1) // 2)
+
+    # Evaluate G(x) = F(x) / x^(N-1) at x = 1, 2, ..., evaluation_count.
+    for x in range(1, evaluation_count + 1):
+        base = (1 + x) % mod
+
+        base_powers = [1] * (max_base_power + 1)
+        for i in range(1, max_base_power + 1):
+            base_powers[i] = base_powers[i - 1] * base % mod
+
+        # Transition from a previous layer of size a to a new layer of size b:
+        # (1+x)^(C(b,2)) * ((1+x)^a - 1)^b
+        transition_value = [0] * (H * H)
+        for a in range(1, half + 1):
+            nonempty_neighbors = (base_powers[a] - 1) % mod
+            power = 1
+            for b in range(1, half + 1):
+                power = power * nonempty_neighbors % mod
+                inside_edges = b * (b - 1) // 2
+                transition_value[a * H + b] = (
+                    base_powers[inside_edges] * power
+                ) % mod
+
+        group_values = [
+            transition_value[index] * choose_factor % mod
+            for index, choose_factor in groups
+        ]
+
+        dp = [0] * len(states)
+        dp[0] = 1
+
+        for src in processing_order:
+            current = dp[src]
+            if current == 0:
+                continue
+            for dst, gid in outgoing[src]:
+                dp[dst] = (
+                    dp[dst] + current * group_values[gid]
+                ) % mod
+
+        f_value = sum(dp[i] for i in terminal_states) % mod
+        reduced_value = (
+            f_value * pow(inverses[x], min_edges, mod)
+        ) % mod
+        values.append(reduced_value)
+
+    # Forward differences:
+    # G(x) = sum_k delta[k] * binom(x-1, k)
+    differences = values[:]
+    deltas = []
+    while differences:
+        deltas.append(differences[0])
+        differences = [
+            (differences[i + 1] - differences[i]) % mod
+            for i in range(len(differences) - 1)
+        ]
+
+    # Convert the Newton basis binom(x-1, k) to monomial coefficients.
+    coefficients = [0] * evaluation_count
+    basis = [1]  # binom(x-1, 0)
+
+    for k in range(evaluation_count):
+        d = deltas[k]
+        if d:
+            for j, value in enumerate(basis):
+                coefficients[j] = (
+                    coefficients[j] + d * value
+                ) % mod
+
+        if k + 1 < evaluation_count:
+            q = k + 1
+            inv_q = inverses[q]
+            length = len(basis)
+            new_basis = [0] * (length + 1)
+
+            # Multiply by (x-q)/q.
+            new_basis[0] = (-basis[0]) % mod
+            for j in range(1, length):
+                new_basis[j] = (
+                    basis[j - 1] * inv_q - basis[j]
+                ) % mod
+            new_basis[length] = basis[length - 1] * inv_q % mod
+            basis = new_basis
+
+    answers = []
+    for m in range(min_edges, total_edges + 1):
+        degree = m - min_edges
+        if degree < evaluation_count:
+            answers.append(str(coefficients[degree]))
+        else:
+            answers.append("0")
+
+    print(" ".join(answers))
+
+
+if __name__ == "__main__":
+    solve()
+```

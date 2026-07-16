@@ -1,0 +1,72 @@
+Looking at this problem:
+
+**Key insight**: For a sorted range of `m` mochi, the maximum number of pairs `K` is achievable by pairing the `i`-th smallest with the `(m-K+i)`-th smallest. So `K` is feasible iff for all `i` in `[0, K-1]`: `2*A[L+i] <= A[R-K+1+i]`.
+
+Define `f(i)` = smallest index `j` with `A[j] >= 2*A[i]` (computable with two pointers since `A` is sorted), and `g(i) = f(i) - i`. The condition becomes: `max(g[L..L+K-1]) <= m - K`.
+
+Since `max(g[L..L+K-1]) + K` is strictly increasing in `K`, we can binary search on `K` for each query, answering range-max queries with a sparse table. Total complexity: `O((N + Q) log N)`.
+
+Verified against sample 1: e.g., query (2,5) → values [1,2,3,4], g values [1,2,3,4]→ for K=2: max(g)=2 ≤ 4-2=2 ✓, answer 2. Query (7,11): K=2 fails (4 > 3), K=1 works → answer 1. ✓
+
+```python
+import sys
+
+def main():
+    data = sys.stdin.buffer.read().split()
+    ptr = 0
+    n = int(data[ptr]); ptr += 1
+    A = list(map(int, data[ptr:ptr+n])); ptr += n
+    q = int(data[ptr]); ptr += 1
+
+    # g[i] = (smallest j with A[j] >= 2*A[i]) - i, via two pointers
+    g = [0]*n
+    j = 0
+    for i in range(n):
+        t = A[i] << 1
+        while j < n and A[j] < t:
+            j += 1
+        g[i] = j - i
+
+    # sparse table for range max on g
+    sp = [g]
+    k = 1
+    while (1 << k) <= n:
+        prev = sp[k-1]
+        half = 1 << (k-1)
+        sp.append([a if a > b else b for a, b in zip(prev, prev[half:])])
+        k += 1
+
+    logt = [0]*(n+1)
+    for i in range(2, n+1):
+        logt[i] = logt[i >> 1] + 1
+
+    out = []
+    for _ in range(q):
+        L = int(data[ptr]) - 1
+        R = int(data[ptr+1]) - 1
+        ptr += 2
+        m = R - L + 1
+        lo, hi = 0, m >> 1
+        while lo < hi:
+            mid = (lo + hi + 1) >> 1
+            # check max(g[L .. L+mid-1]) <= m - mid
+            kk = logt[mid]
+            s = sp[kk]
+            a = s[L]
+            b = s[L + mid - (1 << kk)]
+            mx = a if a > b else b
+            if mx <= m - mid:
+                lo = mid
+            else:
+                hi = mid - 1
+        out.append(lo)
+    sys.stdout.write('\n'.join(map(str, out)))
+
+main()
+```
+
+**Explanation of approach:**
+1. **Two pointers** compute `f(i)` (first index whose value is at least twice `A[i]`) in O(N), since `2*A[i]` is non-decreasing.
+2. **Feasibility of K** for range `[L, R]` with `m = R-L+1`: pairing the K smallest with the K largest in order requires `f(L+i) <= R-K+1+i` for each `i`, i.e., `g(L+i) <= m-K` — so we just need the max of `g` over the first K positions to be at most `m-K`.
+3. **Monotonicity**: as `K` grows, the left side (range max) is non-decreasing while `m-K` decreases, so binary search finds the maximum feasible `K`.
+4. **Sparse table** answers each range-max query in O(1), giving O(log N) per query.

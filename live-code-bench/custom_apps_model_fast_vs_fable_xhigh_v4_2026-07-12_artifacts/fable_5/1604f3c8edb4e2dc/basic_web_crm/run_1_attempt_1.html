@@ -1,0 +1,701 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PulseCRM — Simple CRM</title>
+<style>
+  :root{
+    --bg:#f4f6fa; --surface:#ffffff; --border:#e3e8f0; --text:#1e2533; --muted:#6b7688;
+    --primary:#3b5bfd; --primary-dark:#2a45d8; --primary-soft:#eef1ff;
+    --green:#16a34a; --green-soft:#e7f7ec; --red:#dc2626; --red-soft:#fdecec;
+    --amber:#d97706; --amber-soft:#fdf3e3; --purple:#7c3aed; --purple-soft:#f3ecfe;
+    --blue:#2563eb; --blue-soft:#e8f0fe; --gray:#64748b; --gray-soft:#eef1f5;
+    --shadow:0 1px 3px rgba(20,30,60,.08),0 4px 14px rgba(20,30,60,.06);
+    --shadow-lg:0 10px 40px rgba(20,30,60,.18);
+    --radius:12px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{font-size:16px}
+  body{font-family:"Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;min-height:100vh}
+  button{font-family:inherit;cursor:pointer}
+  input,select,textarea{font-family:inherit;font-size:.95rem}
+
+  /* ---------- Header / Nav ---------- */
+  header{background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
+  .header-inner{max-width:1200px;margin:0 auto;padding:.75rem 1.25rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+  .logo{display:flex;align-items:center;gap:.55rem;font-weight:700;font-size:1.15rem;letter-spacing:-.02em}
+  .logo-mark{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--primary),#7c3aed);display:grid;place-items:center;color:#fff;font-size:1rem;font-weight:800}
+  nav{display:flex;gap:.25rem;margin-left:auto}
+  .nav-btn{border:none;background:transparent;color:var(--muted);font-weight:600;font-size:.92rem;padding:.5rem .9rem;border-radius:8px;transition:.15s}
+  .nav-btn:hover{background:var(--gray-soft);color:var(--text)}
+  .nav-btn.active{background:var(--primary-soft);color:var(--primary)}
+
+  main{max-width:1200px;margin:0 auto;padding:1.5rem 1.25rem 4rem}
+  .view{display:none;animation:fade .25s ease}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  .view-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem}
+  .view-header h1{font-size:1.45rem;letter-spacing:-.02em}
+  .view-header p{color:var(--muted);font-size:.9rem}
+
+  /* ---------- Buttons ---------- */
+  .btn{display:inline-flex;align-items:center;gap:.4rem;border:none;border-radius:9px;padding:.55rem 1rem;font-size:.9rem;font-weight:600;transition:.15s}
+  .btn-primary{background:var(--primary);color:#fff}
+  .btn-primary:hover{background:var(--primary-dark)}
+  .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+  .btn-ghost:hover{background:var(--gray-soft);color:var(--text)}
+  .btn-danger{background:var(--red);color:#fff}
+  .btn-danger:hover{filter:brightness(.92)}
+  .btn-sm{padding:.3rem .6rem;font-size:.8rem;border-radius:7px}
+  .icon-btn{border:none;background:transparent;border-radius:7px;padding:.35rem .5rem;color:var(--muted);font-size:.9rem;transition:.15s}
+  .icon-btn:hover{background:var(--gray-soft);color:var(--text)}
+  .icon-btn.danger:hover{background:var(--red-soft);color:var(--red)}
+
+  /* ---------- Cards / Stats ---------- */
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1rem;margin-bottom:1.5rem}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.1rem 1.2rem;box-shadow:var(--shadow)}
+  .stat-label{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  .stat-value{font-size:1.7rem;font-weight:700;letter-spacing:-.02em;margin-top:.25rem}
+  .stat-sub{font-size:.8rem;color:var(--muted);margin-top:.15rem}
+  .stat-accent{width:36px;height:4px;border-radius:99px;margin-bottom:.7rem}
+
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.2rem;margin-bottom:1.25rem}
+  .panel h2{font-size:1rem;margin-bottom:.9rem}
+  .dash-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:1.25rem}
+  @media(max-width:820px){.dash-grid{grid-template-columns:1fr}}
+
+  .funnel-row{display:grid;grid-template-columns:110px 1fr 90px;align-items:center;gap:.7rem;margin-bottom:.6rem;font-size:.85rem}
+  .funnel-track{background:var(--gray-soft);border-radius:99px;height:12px;overflow:hidden}
+  .funnel-fill{height:100%;border-radius:99px;transition:width .4s ease;min-width:2px}
+  .funnel-val{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;font-size:.8rem}
+
+  .recent-item{display:flex;align-items:center;gap:.7rem;padding:.55rem 0;border-bottom:1px solid var(--border)}
+  .recent-item:last-child{border-bottom:none}
+  .recent-item .grow{flex:1;min-width:0}
+  .recent-item .title{font-weight:600;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .recent-item .sub{font-size:.78rem;color:var(--muted)}
+  .recent-item .amt{font-weight:700;font-size:.88rem;font-variant-numeric:tabular-nums}
+
+  /* ---------- Toolbar ---------- */
+  .toolbar{display:flex;gap:.7rem;flex-wrap:wrap;margin-bottom:1.1rem}
+  .search-wrap{position:relative;flex:1;min-width:200px}
+  .search-wrap span{position:absolute;left:.7rem;top:50%;transform:translateY(-50%);color:var(--muted);font-size:.9rem;pointer-events:none}
+  .search-wrap input{width:100%;padding:.55rem .8rem .55rem 2.1rem;border:1px solid var(--border);border-radius:9px;background:var(--surface);outline:none;transition:.15s}
+  .toolbar select{padding:.55rem .7rem;border:1px solid var(--border);border-radius:9px;background:var(--surface);outline:none;color:var(--text);min-width:150px}
+  .search-wrap input:focus,.toolbar select:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+
+  /* ---------- Table ---------- */
+  .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow-x:auto}
+  table{width:100%;border-collapse:collapse;min-width:720px}
+  th{text-align:left;font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);padding:.75rem 1rem;border-bottom:1px solid var(--border);background:#fafbfd}
+  td{padding:.8rem 1rem;border-bottom:1px solid var(--border);font-size:.9rem;vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  tbody tr{transition:background .12s}
+  tbody tr:hover{background:#f8faff}
+  .avatar{width:36px;height:36px;border-radius:50%;display:inline-grid;place-items:center;color:#fff;font-weight:700;font-size:.8rem;flex-shrink:0}
+  .cell-person{display:flex;align-items:center;gap:.7rem}
+  .cell-person .name{font-weight:600}
+  .cell-person .email{font-size:.78rem;color:var(--muted)}
+  .actions-cell{white-space:nowrap;text-align:right}
+
+  .badge{display:inline-block;padding:.18rem .6rem;border-radius:99px;font-size:.72rem;font-weight:700}
+  .b-lead{background:var(--gray-soft);color:var(--gray)}
+  .b-prospect{background:var(--blue-soft);color:var(--blue)}
+  .b-customer{background:var(--green-soft);color:var(--green)}
+  .b-churned{background:var(--red-soft);color:var(--red)}
+  .b-qualified{background:var(--blue-soft);color:var(--blue)}
+  .b-proposal{background:var(--purple-soft);color:var(--purple)}
+  .b-negotiation{background:var(--amber-soft);color:var(--amber)}
+  .b-won{background:var(--green-soft);color:var(--green)}
+  .b-lost{background:var(--red-soft);color:var(--red)}
+
+  /* ---------- Pipeline board ---------- */
+  .board{display:grid;grid-template-columns:repeat(6,minmax(215px,1fr));gap:.9rem;overflow-x:auto;padding-bottom:.5rem}
+  .col{background:#eef1f6;border:1px solid var(--border);border-radius:var(--radius);padding:.7rem;min-height:220px;display:flex;flex-direction:column}
+  .col.drag-over{outline:2px dashed var(--primary);outline-offset:-2px;background:var(--primary-soft)}
+  .col-head{display:flex;align-items:center;justify-content:space-between;padding:.15rem .3rem .6rem}
+  .col-title{font-size:.8rem;font-weight:700;display:flex;align-items:center;gap:.45rem}
+  .col-dot{width:9px;height:9px;border-radius:50%}
+  .col-count{font-size:.72rem;color:var(--muted);background:var(--surface);border:1px solid var(--border);padding:.05rem .5rem;border-radius:99px;font-weight:700}
+  .col-total{font-size:.72rem;color:var(--muted);padding:0 .3rem .55rem;font-variant-numeric:tabular-nums}
+  .deal-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.7rem .75rem;margin-bottom:.6rem;box-shadow:0 1px 2px rgba(20,30,60,.06);cursor:grab;transition:.15s}
+  .deal-card:hover{box-shadow:var(--shadow);transform:translateY(-1px)}
+  .deal-card.dragging{opacity:.45;cursor:grabbing}
+  .deal-title{font-weight:600;font-size:.88rem;margin-bottom:.15rem}
+  .deal-company{font-size:.76rem;color:var(--muted);margin-bottom:.4rem}
+  .deal-foot{display:flex;align-items:center;justify-content:space-between}
+  .deal-value{font-weight:700;font-size:.85rem;font-variant-numeric:tabular-nums}
+  .deal-actions{display:flex;gap:.1rem}
+  .col-empty{border:1.5px dashed #cdd5e1;border-radius:10px;color:#9aa5b5;font-size:.75rem;text-align:center;padding:.9rem .5rem}
+
+  /* ---------- Empty state ---------- */
+  .empty-state{text-align:center;padding:3rem 1.5rem;color:var(--muted)}
+  .empty-state .ico{font-size:2.4rem;margin-bottom:.5rem}
+  .empty-state h3{color:var(--text);font-size:1.05rem;margin-bottom:.25rem}
+  .empty-state p{font-size:.88rem;margin-bottom:1rem}
+
+  /* ---------- Modal ---------- */
+  .modal-overlay{position:fixed;inset:0;background:rgba(15,22,40,.5);display:none;align-items:flex-start;justify-content:center;padding:4vh 1rem;z-index:100;backdrop-filter:blur(2px)}
+  .modal-overlay.open{display:flex}
+  .modal{background:var(--surface);border-radius:14px;box-shadow:var(--shadow-lg);width:100%;max-width:520px;animation:pop .2s ease;max-height:92vh;overflow-y:auto}
+  @keyframes pop{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
+  .modal-head{display:flex;align-items:center;justify-content:space-between;padding:1.05rem 1.3rem;border-bottom:1px solid var(--border)}
+  .modal-head h2{font-size:1.05rem}
+  .modal-body{padding:1.2rem 1.3rem}
+  .modal-foot{display:flex;justify-content:flex-end;gap:.6rem;padding:1rem 1.3rem;border-top:1px solid var(--border)}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
+  .form-grid .full{grid-column:1/-1}
+  @media(max-width:520px){.form-grid{grid-template-columns:1fr}}
+  .field label{display:block;font-size:.78rem;font-weight:700;margin-bottom:.3rem;color:var(--text)}
+  .field label .req{color:var(--red)}
+  .field input,.field select,.field textarea{width:100%;padding:.55rem .7rem;border:1px solid var(--border);border-radius:9px;outline:none;background:var(--surface);color:var(--text);transition:.15s}
+  .field textarea{resize:vertical;min-height:70px}
+  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+  .field.invalid input,.field.invalid select{border-color:var(--red);box-shadow:0 0 0 3px var(--red-soft)}
+  .err-msg{display:none;font-size:.75rem;color:var(--red);margin-top:.25rem;font-weight:600}
+  .field.invalid .err-msg{display:block}
+
+  /* ---------- Toast ---------- */
+  #toast-zone{position:fixed;bottom:1.2rem;left:50%;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:.5rem;align-items:center;pointer-events:none}
+  .toast{background:#1e2533;color:#fff;padding:.6rem 1.1rem;border-radius:10px;font-size:.88rem;font-weight:600;box-shadow:var(--shadow-lg);animation:toastIn .25s ease;display:flex;gap:.5rem;align-items:center}
+  .toast.success::before{content:"✓";color:#4ade80;font-weight:800}
+  .toast.danger::before{content:"✕";color:#f87171;font-weight:800}
+  @keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+  .count-note{font-size:.8rem;color:var(--muted);margin:-.4rem 0 .7rem}
+
+  footer{text-align:center;color:var(--muted);font-size:.78rem;padding:1.5rem}
+
+  @media(max-width:700px){
+    table{min-width:600px}
+    .view-header h1{font-size:1.25rem}
+    nav{width:100%;overflow-x:auto}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="logo"><span class="logo-mark">P</span> PulseCRM</div>
+    <nav>
+      <button class="nav-btn active" data-view="dashboard">Dashboard</button>
+      <button class="nav-btn" data-view="contacts">Contacts</button>
+      <button class="nav-btn" data-view="deals">Deals</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ================= DASHBOARD ================= -->
+  <section id="view-dashboard" class="view active">
+    <div class="view-header">
+      <div><h1>Dashboard</h1><p>Snapshot of your contacts and pipeline.</p></div>
+      <button class="btn btn-primary" onclick="openDealModal()">+ New Deal</button>
+    </div>
+    <div class="stats-grid" id="stats-grid"></div>
+    <div class="dash-grid">
+      <div class="panel">
+        <h2>Pipeline by Stage</h2>
+        <div id="funnel"></div>
+      </div>
+      <div class="panel">
+        <h2>Recent Deals</h2>
+        <div id="recent-deals"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CONTACTS ================= -->
+  <section id="view-contacts" class="view">
+    <div class="view-header">
+      <div><h1>Contacts</h1><p>Everyone you're working with.</p></div>
+      <button class="btn btn-primary" onclick="openContactModal()">+ Add Contact</button>
+    </div>
+    <div class="toolbar">
+      <div class="search-wrap"><span>🔍</span><input id="contact-search" type="text" placeholder="Search name, email or company…"></div>
+      <select id="contact-filter">
+        <option value="">All statuses</option>
+        <option value="Lead">Lead</option>
+        <option value="Prospect">Prospect</option>
+        <option value="Customer">Customer</option>
+        <option value="Churned">Churned</option>
+      </select>
+    </div>
+    <p class="count-note" id="contact-count"></p>
+    <div class="table-wrap" id="contacts-table-wrap"></div>
+  </section>
+
+  <!-- ================= DEALS ================= -->
+  <section id="view-deals" class="view">
+    <div class="view-header">
+      <div><h1>Deals</h1><p>Drag cards between stages or edit to update.</p></div>
+      <button class="btn btn-primary" onclick="openDealModal()">+ Add Deal</button>
+    </div>
+    <div class="toolbar">
+      <div class="search-wrap"><span>🔍</span><input id="deal-search" type="text" placeholder="Search deal or contact…"></div>
+      <select id="deal-filter">
+        <option value="">All stages</option>
+      </select>
+    </div>
+    <p class="count-note" id="deal-count"></p>
+    <div class="board" id="board"></div>
+  </section>
+</main>
+
+<footer>PulseCRM · data is stored locally in your browser</footer>
+
+<!-- ================= CONTACT MODAL ================= -->
+<div class="modal-overlay" id="contact-modal">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head"><h2 id="contact-modal-title">Add Contact</h2><button class="icon-btn" onclick="closeModal('contact-modal')">✕</button></div>
+    <div class="modal-body">
+      <form id="contact-form" novalidate>
+        <input type="hidden" id="c-id">
+        <div class="form-grid">
+          <div class="field" id="f-c-name"><label>Full name <span class="req">*</span></label>
+            <input id="c-name" type="text" placeholder="Jane Cooper"><div class="err-msg">Name is required.</div></div>
+          <div class="field" id="f-c-company"><label>Company</label>
+            <input id="c-company" type="text" placeholder="Acme Inc."></div>
+          <div class="field" id="f-c-email"><label>Email <span class="req">*</span></label>
+            <input id="c-email" type="email" placeholder="jane@acme.com"><div class="err-msg" id="c-email-err">A valid email is required.</div></div>
+          <div class="field" id="f-c-phone"><label>Phone</label>
+            <input id="c-phone" type="tel" placeholder="(555) 010-0199"></div>
+          <div class="field" id="f-c-status"><label>Status <span class="req">*</span></label>
+            <select id="c-status">
+              <option value="Lead">Lead</option><option value="Prospect">Prospect</option>
+              <option value="Customer">Customer</option><option value="Churned">Churned</option>
+            </select></div>
+          <div class="field full"><label>Notes</label><textarea id="c-notes" placeholder="Context, next steps…"></textarea></div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('contact-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveContact()">Save Contact</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= DEAL MODAL ================= -->
+<div class="modal-overlay" id="deal-modal">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head"><h2 id="deal-modal-title">Add Deal</h2><button class="icon-btn" onclick="closeModal('deal-modal')">✕</button></div>
+    <div class="modal-body">
+      <form id="deal-form" novalidate>
+        <input type="hidden" id="d-id">
+        <div class="form-grid">
+          <div class="field full" id="f-d-title"><label>Deal name <span class="req">*</span></label>
+            <input id="d-title" type="text" placeholder="Annual license renewal"><div class="err-msg">Deal name is required.</div></div>
+          <div class="field" id="f-d-value"><label>Value (USD) <span class="req">*</span></label>
+            <input id="d-value" type="number" min="0" step="100" placeholder="12000"><div class="err-msg">Enter a value greater than 0.</div></div>
+          <div class="field" id="f-d-stage"><label>Stage <span class="req">*</span></label>
+            <select id="d-stage"></select></div>
+          <div class="field" id="f-d-contact"><label>Contact <span class="req">*</span></label>
+            <select id="d-contact"></select><div class="err-msg">Please choose a contact.</div></div>
+          <div class="field" id="f-d-close"><label>Expected close</label>
+            <input id="d-close" type="date"></div>
+          <div class="field full"><label>Notes</label><textarea id="d-notes" placeholder="Key details…"></textarea></div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('deal-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDeal()">Save Deal</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= CONFIRM MODAL ================= -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal" style="max-width:400px" role="alertdialog" aria-modal="true">
+    <div class="modal-head"><h2>Please confirm</h2><button class="icon-btn" onclick="closeModal('confirm-modal')">✕</button></div>
+    <div class="modal-body"><p id="confirm-text" style="font-size:.92rem;color:var(--muted)"></p></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('confirm-modal')">Cancel</button>
+      <button class="btn btn-danger" id="confirm-yes">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-zone"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================ CONSTANTS ============================ */
+const LS_KEY = "pulsecrm-data-v1";
+const STAGES = [
+  {id:"Lead",        color:"#64748b", badge:"b-lead"},
+  {id:"Qualified",   color:"#2563eb", badge:"b-qualified"},
+  {id:"Proposal",    color:"#7c3aed", badge:"b-proposal"},
+  {id:"Negotiation", color:"#d97706", badge:"b-negotiation"},
+  {id:"Won",         color:"#16a34a", badge:"b-won"},
+  {id:"Lost",        color:"#dc2626", badge:"b-lost"}
+];
+const STATUS_BADGE = {Lead:"b-lead",Prospect:"b-prospect",Customer:"b-customer",Churned:"b-churned"};
+const AVATAR_COLORS = ["#3b5bfd","#7c3aed","#16a34a","#d97706","#0e9aa7","#e0447c","#5b6b8c","#c2410c"];
+
+/* ============================ SEED DATA ============================ */
+function seedData(){
+  const c = (id,name,company,email,phone,status,notes)=>({id,name,company,email,phone,status,notes,createdAt:Date.now()-Math.random()*30*864e5});
+  const d = (id,title,value,stage,contactId,closeDate,notes)=>({id,title,value,stage,contactId,closeDate,notes,updatedAt:Date.now()-Math.random()*20*864e5});
+  return {
+    contacts:[
+      c("c1","Ava Thornton","Northwind Logistics","ava.thornton@northwind.io","(555) 014-2231","Customer","Renewal champion. Prefers email."),
+      c("c2","Marcus Bell","Helio Analytics","marcus@helioanalytics.com","(555) 019-8830","Prospect","Met at SaaSCon. Evaluating vendors."),
+      c("c3","Priya Raman","Bluefin Health","priya.raman@bluefinhealth.org","(555) 012-4471","Lead","Inbound demo request via website."),
+      c("c4","Diego Fuentes","Cortada Foods","diego@cortadafoods.com","(555) 017-9942","Customer","Expanding to 3 new regions in Q3."),
+      c("c5","Hannah Lieb","Vexa Robotics","hannah.lieb@vexarobotics.ai","(555) 013-5518","Prospect","Needs security review before pilot."),
+      c("c6","Tom Okafor","Brightline Media","tom.okafor@brightline.tv","(555) 016-3327","Lead","Referred by Ava Thornton."),
+      c("c7","Sofie Nyström","Aster & Co.","sofie@asterandco.se","(555) 011-7784","Churned","Lost to competitor in 2023 — re-engage."),
+      c("c8","Ray Chen","Quanta Freight","ray.chen@quantafreight.com","(555) 018-6640","Customer","Quarterly business reviews scheduled.")
+    ],
+    deals:[
+      d("d1","Northwind annual renewal",42000,"Negotiation","c1","2025-08-15","Pushing for 2-year term."),
+      d("d2","Helio Analytics pilot",8500,"Qualified","c2","2025-07-30","Pilot scoped for 20 seats."),
+      d("d3","Bluefin platform demo",15000,"Lead","c3","2025-09-01","Waiting on IT contact."),
+      d("d4","Cortada regional expansion",56000,"Proposal","c4","2025-08-20","Proposal sent 06/12."),
+      d("d5","Vexa security pilot",22500,"Proposal","c5","2025-08-05","Security questionnaire returned."),
+      d("d6","Brightline starter plan",4800,"Lead","c6","2025-09-10",""),
+      d("d7","Aster & Co. win-back",18000,"Lost","c7","2025-05-30","Chose incumbent. Revisit Q4."),
+      d("d8","Quanta Freight upsell",31000,"Won","c8","2025-06-01","Signed! Onboarding in progress."),
+      d("d9","Northwind services add-on",9600,"Qualified","c1","2025-08-28","Training package interest."),
+      d("d10","Cortada support upgrade",7200,"Won","c4","2025-06-10","Premium support live.")
+    ]
+  };
+}
+
+/* ============================ STATE ============================ */
+let state;
+function load(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw){ state = JSON.parse(raw); if(!state.contacts||!state.deals) throw 0; return; }
+  }catch(e){ /* fall through to seed */ }
+  state = seedData();
+  save();
+}
+function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){ toast("Could not save to localStorage","danger"); } }
+const uid = ()=> "id-"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+/* ============================ HELPERS ============================ */
+const $ = s => document.querySelector(s);
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m])); }
+function money(n){ return "$"+Number(n||0).toLocaleString("en-US"); }
+function initials(name){ return name.trim().split(/\s+/).slice(0,2).map(w=>w[0].toUpperCase()).join(""); }
+function avatarColor(id){ let h=0; for(const ch of id) h=(h*31+ch.charCodeAt(0))>>>0; return AVATAR_COLORS[h%AVATAR_COLORS.length]; }
+function contactById(id){ return state.contacts.find(c=>c.id===id); }
+function stageMeta(id){ return STAGES.find(s=>s.id===id)||STAGES[0]; }
+function fmtDate(d){ if(!d) return "—"; const dt=new Date(d+"T00:00:00"); return isNaN(dt)?"—":dt.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}); }
+
+function toast(msg,type){
+  const el=document.createElement("div");
+  el.className="toast "+(type||"success");
+  el.textContent=msg;
+  $("#toast-zone").appendChild(el);
+  setTimeout(()=>{ el.style.transition="opacity .3s"; el.style.opacity="0"; setTimeout(()=>el.remove(),320); },2400);
+}
+
+/* ============================ NAV ============================ */
+document.querySelectorAll(".nav-btn").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("active"));
+    document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+    btn.classList.add("active");
+    $("#view-"+btn.dataset.view).classList.add("active");
+  });
+});
+
+/* ============================ MODALS ============================ */
+function openModal(id){ $("#"+id).classList.add("open"); }
+function closeModal(id){ $("#"+id).classList.remove("open"); }
+document.querySelectorAll(".modal-overlay").forEach(ov=>{
+  ov.addEventListener("mousedown",e=>{ if(e.target===ov) ov.classList.remove("open"); });
+});
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") document.querySelectorAll(".modal-overlay.open").forEach(m=>m.classList.remove("open")); });
+
+let confirmCb=null;
+function askConfirm(text,cb){ $("#confirm-text").textContent=text; confirmCb=cb; openModal("confirm-modal"); }
+$("#confirm-yes").addEventListener("click",()=>{ closeModal("confirm-modal"); if(confirmCb) confirmCb(); confirmCb=null; });
+
+/* ============================ DASHBOARD ============================ */
+function renderDashboard(){
+  const open = state.deals.filter(d=>d.stage!=="Won"&&d.stage!=="Lost");
+  const won  = state.deals.filter(d=>d.stage==="Won");
+  const openVal = open.reduce((s,d)=>s+Number(d.value||0),0);
+  const wonVal  = won.reduce((s,d)=>s+Number(d.value||0),0);
+  const winDen = won.length + state.deals.filter(d=>d.stage==="Lost").length;
+  const winRate = winDen ? Math.round(won.length/winDen*100) : 0;
+
+  const cards=[
+    {label:"Contacts", value:state.contacts.length, sub:state.contacts.filter(c=>c.status==="Customer").length+" customers", color:"var(--primary)"},
+    {label:"Open Deals", value:open.length, sub:"across "+STAGES.length+" stages", color:"var(--purple)"},
+    {label:"Pipeline Value", value:money(openVal), sub:"open opportunities", color:"var(--amber)"},
+    {label:"Won Revenue", value:money(wonVal), sub:winRate+"% win rate", color:"var(--green)"}
+  ];
+  $("#stats-grid").innerHTML = cards.map(c=>`
+    <div class="stat-card">
+      <div class="stat-accent" style="background:${c.color}"></div>
+      <div class="stat-label">${c.label}</div>
+      <div class="stat-value">${esc(c.value)}</div>
+      <div class="stat-sub">${esc(c.sub)}</div>
+    </div>`).join("");
+
+  // Funnel
+  const totals = STAGES.map(s=>({...s, sum:state.deals.filter(d=>d.stage===s.id).reduce((a,d)=>a+Number(d.value||0),0),
+                                        n:state.deals.filter(d=>d.stage===s.id).length}));
+  const max = Math.max(...totals.map(t=>t.sum),1);
+  $("#funnel").innerHTML = state.deals.length ? totals.map(t=>`
+    <div class="funnel-row">
+      <span style="font-weight:600">${t.id} <span style="color:var(--muted);font-weight:500">(${t.n})</span></span>
+      <div class="funnel-track"><div class="funnel-fill" style="width:${Math.round(t.sum/max*100)}%;background:${t.color}"></div></div>
+      <span class="funnel-val">${money(t.sum)}</span>
+    </div>`).join("")
+    : `<div class="empty-state"><div class="ico">📊</div><h3>No deals yet</h3><p>Add a deal to see your pipeline breakdown.</p><button class="btn btn-primary btn-sm" onclick="openDealModal()">+ Add Deal</button></div>`;
+
+  // Recent deals
+  const recent=[...state.deals].sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)).slice(0,6);
+  $("#recent-deals").innerHTML = recent.length ? recent.map(d=>{
+    const c=contactById(d.contactId); const s=stageMeta(d.stage);
+    return `<div class="recent-item">
+      <span class="avatar" style="background:${avatarColor(d.contactId||d.id)};width:32px;height:32px;font-size:.72rem">${c?initials(c.name):"?"}</span>
+      <div class="grow"><div class="title">${esc(d.title)}</div><div class="sub">${c?esc(c.name):"Unassigned"} · <span class="badge ${s.badge}">${s.id}</span></div></div>
+      <span class="amt">${money(d.value)}</span>
+    </div>`;}).join("")
+    : `<div class="empty-state"><div class="ico">🗂️</div><h3>Nothing here yet</h3><p>Recent deal activity will show up here.</p></div>`;
+}
+
+/* ============================ CONTACTS ============================ */
+function renderContacts(){
+  const q = $("#contact-search").value.trim().toLowerCase();
+  const f = $("#contact-filter").value;
+  let list = state.contacts.filter(c=>{
+    const hay=(c.name+" "+c.email+" "+(c.company||"")).toLowerCase();
+    return (!q||hay.includes(q)) && (!f||c.status===f);
+  });
+  list.sort((a,b)=>a.name.localeCompare(b.name));
+  $("#contact-count").textContent = state.contacts.length
+    ? `Showing ${list.length} of ${state.contacts.length} contact${state.contacts.length===1?"":"s"}` : "";
+
+  const wrap=$("#contacts-table-wrap");
+  if(!state.contacts.length){
+    wrap.innerHTML=`<div class="empty-state"><div class="ico">👥</div><h3>No contacts yet</h3><p>Add your first contact to start building relationships.</p><button class="btn btn-primary" onclick="openContactModal()">+ Add Contact</button></div>`;
+    return;
+  }
+  if(!list.length){
+    wrap.innerHTML=`<div class="empty-state"><div class="ico">🔍</div><h3>No matches</h3><p>No contacts match your search or filter. Try adjusting them.</p><button class="btn btn-ghost btn-sm" onclick="clearContactFilters()">Clear filters</button></div>`;
+    return;
+  }
+  wrap.innerHTML=`<table>
+    <thead><tr><th>Contact</th><th>Company</th><th>Phone</th><th>Status</th><th>Open Deals</th><th style="text-align:right">Actions</th></tr></thead>
+    <tbody>${list.map(c=>{
+      const openDeals=state.deals.filter(d=>d.contactId===c.id&&d.stage!=="Won"&&d.stage!=="Lost");
+      const openVal=openDeals.reduce((s,d)=>s+Number(d.value||0),0);
+      return `<tr>
+        <td><div class="cell-person">
+          <span class="avatar" style="background:${avatarColor(c.id)}">${initials(c.name)}</span>
+          <div><div class="name">${esc(c.name)}</div><div class="email">${esc(c.email)}</div></div>
+        </div></td>
+        <td>${esc(c.company)||"—"}</td>
+        <td>${esc(c.phone)||"—"}</td>
+        <td><span class="badge ${STATUS_BADGE[c.status]||"b-lead"}">${esc(c.status)}</span></td>
+        <td>${openDeals.length?`${openDeals.length} · <strong>${money(openVal)}</strong>`:"—"}</td>
+        <td class="actions-cell">
+          <button class="icon-btn" title="Edit" onclick="openContactModal('${c.id}')">✏️</button>
+          <button class="icon-btn danger" title="Delete" onclick="deleteContact('${c.id}')">🗑️</button>
+        </td></tr>`;}).join("")}
+    </tbody></table>`;
+}
+function clearContactFilters(){ $("#contact-search").value=""; $("#contact-filter").value=""; renderContacts(); }
+
+function openContactModal(id){
+  const form=$("#contact-form"); form.reset();
+  document.querySelectorAll("#contact-modal .field").forEach(f=>f.classList.remove("invalid"));
+  const c=id?contactById(id):null;
+  $("#contact-modal-title").textContent=c?"Edit Contact":"Add Contact";
+  $("#c-id").value=c?c.id:"";
+  if(c){ $("#c-name").value=c.name; $("#c-company").value=c.company||""; $("#c-email").value=c.email;
+         $("#c-phone").value=c.phone||""; $("#c-status").value=c.status; $("#c-notes").value=c.notes||""; }
+  openModal("contact-modal");
+  setTimeout(()=>$("#c-name").focus(),60);
+}
+function saveContact(){
+  const name=$("#c-name").value.trim(), email=$("#c-email").value.trim();
+  let ok=true;
+  const nameF=$("#f-c-name"), emailF=$("#f-c-email");
+  nameF.classList.toggle("invalid",!name); if(!name) ok=false;
+  const emailValid=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  emailF.classList.toggle("invalid",!emailValid);
+  $("#c-email-err").textContent = email? "Enter a valid email address." : "A valid email is required.";
+  if(!emailValid) ok=false;
+  if(!ok) return;
+
+  const id=$("#c-id").value;
+  const data={name, company:$("#c-company").value.trim(), email, phone:$("#c-phone").value.trim(),
+              status:$("#c-status").value, notes:$("#c-notes").value.trim()};
+  if(id){
+    const c=contactById(id); Object.assign(c,data);
+    toast("Contact updated");
+  }else{
+    state.contacts.push({id:uid(), createdAt:Date.now(), ...data});
+    toast("Contact added");
+  }
+  save(); closeModal("contact-modal"); renderAll();
+}
+function deleteContact(id){
+  const c=contactById(id); if(!c) return;
+  const linked=state.deals.filter(d=>d.contactId===id).length;
+  askConfirm(`Delete "${c.name}"?`+(linked?` ${linked} linked deal${linked===1?"":"s"} will become unassigned.`:"")+" This cannot be undone.",()=>{
+    state.contacts=state.contacts.filter(x=>x.id!==id);
+    state.deals.forEach(d=>{ if(d.contactId===id) d.contactId=""; });
+    save(); renderAll(); toast("Contact deleted","danger");
+  });
+}
+
+/* ============================ DEALS ============================ */
+function renderDeals(){
+  const q=$("#deal-search").value.trim().toLowerCase();
+  const f=$("#deal-filter").value;
+  const visible = state.deals.filter(d=>{
+    const c=contactById(d.contactId);
+    const hay=(d.title+" "+(c?c.name+" "+(c.company||""):"")).toLowerCase();
+    return (!q||hay.includes(q)) && (!f||d.stage===f);
+  });
+  $("#deal-count").textContent = state.deals.length
+    ? `Showing ${visible.length} of ${state.deals.length} deal${state.deals.length===1?"":"s"}` : "";
+
+  const board=$("#board");
+  if(!state.deals.length){
+    board.innerHTML=`<div class="empty-state" style="grid-column:1/-1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)">
+      <div class="ico">💼</div><h3>No deals yet</h3><p>Create your first deal to start tracking your pipeline.</p>
+      <button class="btn btn-primary" onclick="openDealModal()">+ Add Deal</button></div>`;
+    return;
+  }
+  const shownStages = f? STAGES.filter(s=>s.id===f) : STAGES;
+  board.style.gridTemplateColumns = f? "minmax(260px,420px)" : "";
+  board.innerHTML = shownStages.map(s=>{
+    const deals=visible.filter(d=>d.stage===s.id);
+    const total=deals.reduce((a,d)=>a+Number(d.value||0),0);
+    return `<div class="col" data-stage="${s.id}">
+      <div class="col-head">
+        <span class="col-title"><span class="col-dot" style="background:${s.color}"></span>${s.id}</span>
+        <span class="col-count">${deals.length}</span>
+      </div>
+      <div class="col-total">${money(total)}</div>
+      ${deals.length? deals.map(d=>{
+        const c=contactById(d.contactId);
+        return `<div class="deal-card" draggable="true" data-id="${d.id}">
+          <div class="deal-title">${esc(d.title)}</div>
+          <div class="deal-company">${c?esc(c.name)+(c.company?" · "+esc(c.company):""):"⚠ Unassigned"}${d.closeDate?" · "+fmtDate(d.closeDate):""}</div>
+          <div class="deal-foot">
+            <span class="deal-value">${money(d.value)}</span>
+            <span class="deal-actions">
+              <button class="icon-btn" title="Edit" onclick="openDealModal('${d.id}')">✏️</button>
+              <button class="icon-btn danger" title="Delete" onclick="deleteDeal('${d.id}')">🗑️</button>
+            </span>
+          </div></div>`;}).join("")
+        : `<div class="col-empty">${q||f?"No matching deals":"Drop deals here"}</div>`}
+    </div>`;}).join("");
+  bindDragDrop();
+}
+
+function populateStageSelects(){
+  const opts=STAGES.map(s=>`<option value="${s.id}">${s.id}</option>`).join("");
+  $("#d-stage").innerHTML=opts;
+  $("#deal-filter").innerHTML=`<option value="">All stages</option>`+opts;
+}
+function populateContactSelect(selectedId){
+  const sorted=[...state.contacts].sort((a,b)=>a.name.localeCompare(b.name));
+  $("#d-contact").innerHTML = `<option value="">— Select contact —</option>` +
+    sorted.map(c=>`<option value="${c.id}" ${c.id===selectedId?"selected":""}>${esc(c.name)}${c.company?" ("+esc(c.company)+")":""}</option>`).join("");
+}
+
+function openDealModal(id){
+  $("#deal-form").reset();
+  document.querySelectorAll("#deal-modal .field").forEach(f=>f.classList.remove("invalid"));
+  const d=id?state.deals.find(x=>x.id===id):null;
+  $("#deal-modal-title").textContent=d?"Edit Deal":"Add Deal";
+  $("#d-id").value=d?d.id:"";
+  populateContactSelect(d?d.contactId:"");
+  if(d){ $("#d-title").value=d.title; $("#d-value").value=d.value; $("#d-stage").value=d.stage;
+         $("#d-close").value=d.closeDate||""; $("#d-notes").value=d.notes||""; }
+  openModal("deal-modal");
+  setTimeout(()=>$("#d-title").focus(),60);
+}
+function saveDeal(){
+  const title=$("#d-title").value.trim();
+  const value=parseFloat($("#d-value").value);
+  const contactId=$("#d-contact").value;
+  let ok=true;
+  $("#f-d-title").classList.toggle("invalid",!title); if(!title) ok=false;
+  const valOk=!isNaN(value)&&value>0;
+  $("#f-d-value").classList.toggle("invalid",!valOk); if(!valOk) ok=false;
+  $("#f-d-contact").classList.toggle("invalid",!contactId); if(!contactId) ok=false;
+  if(!ok) return;
+
+  const id=$("#d-id").value;
+  const data={title, value, stage:$("#d-stage").value, contactId,
+              closeDate:$("#d-close").value, notes:$("#d-notes").value.trim(), updatedAt:Date.now()};
+  if(id){
+    Object.assign(state.deals.find(x=>x.id===id),data);
+    toast("Deal updated");
+  }else{
+    state.deals.push({id:uid(),...data});
+    toast("Deal added");
+  }
+  save(); closeModal("deal-modal"); renderAll();
+}
+function deleteDeal(id){
+  const d=state.deals.find(x=>x.id===id); if(!d) return;
+  askConfirm(`Delete deal "${d.title}" (${money(d.value)})? This cannot be undone.`,()=>{
+    state.deals=state.deals.filter(x=>x.id!==id);
+    save(); renderAll(); toast("Deal deleted","danger");
+  });
+}
+
+/* ---------- Drag & Drop ---------- */
+let dragId=null;
+function bindDragDrop(){
+  document.querySelectorAll(".deal-card").forEach(card=>{
+    card.addEventListener("dragstart",e=>{ dragId=card.dataset.id; card.classList.add("dragging"); e.dataTransfer.effectAllowed="move"; });
+    card.addEventListener("dragend",()=>{ card.classList.remove("dragging"); dragId=null; });
+  });
+  document.querySelectorAll(".col").forEach(col=>{
+    col.addEventListener("dragover",e=>{ e.preventDefault(); col.classList.add("drag-over"); });
+    col.addEventListener("dragleave",()=>col.classList.remove("drag-over"));
+    col.addEventListener("drop",e=>{
+      e.preventDefault(); col.classList.remove("drag-over");
+      if(!dragId) return;
+      const d=state.deals.find(x=>x.id===dragId);
+      const stage=col.dataset.stage;
+      if(d && d.stage!==stage){ d.stage=stage; d.updatedAt=Date.now(); save(); renderAll(); toast(`Moved to ${stage}`); }
+    });
+  });
+}
+
+/* ============================ RENDER ALL / INIT ============================ */
+function renderAll(){ renderDashboard(); renderContacts(); renderDeals(); }
+
+["contact-search","contact-filter"].forEach(id=>$("#"+id).addEventListener("input",renderContacts));
+["deal-search","deal-filter"].forEach(id=>$("#"+id).addEventListener("input",renderDeals));
+$("#contact-form").addEventListener("submit",e=>{e.preventDefault();saveContact();});
+$("#deal-form").addEventListener("submit",e=>{e.preventDefault();saveDeal();});
+
+/* expose handlers used in inline HTML */
+window.openContactModal=openContactModal; window.saveContact=saveContact; window.deleteContact=deleteContact;
+window.openDealModal=openDealModal; window.saveDeal=saveDeal; window.deleteDeal=deleteDeal;
+window.closeModal=closeModal; window.clearContactFilters=clearContactFilters;
+
+load();
+populateStageSelects();
+renderAll();
+})();
+</script>
+</body>
+</html>
+```

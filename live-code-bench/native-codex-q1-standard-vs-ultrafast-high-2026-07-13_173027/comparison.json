@@ -1,0 +1,50 @@
+{
+  "problem": "LiveCodeBench release_v6 hard Q1 (abc387_f)",
+  "method": "native Codex exec; response.created-to-response.completed provider lifecycle windows",
+  "server_engine_equivalent": false,
+  "reasoning_effort": "high",
+  "runs_per_model": 1,
+  "rows": [
+    {
+      "model": "gpt-5.6-sol",
+      "passed": true,
+      "checker_scope": "release_dataset_public_and_private",
+      "coverage": "complete",
+      "output_token_reconciliation": "matched",
+      "target_micro_sessions": 10,
+      "target_output_tokens": 5789,
+      "target_provider_response_seconds": 143.393572,
+      "provider_lifecycle_output_tps": 40.371405211943525,
+      "all_model_provider_response_union_seconds": 148.881374,
+      "tool_union_seconds": 12.737,
+      "provider_tool_overlap_seconds": 6.275536,
+      "orchestration_residual_seconds": 8.909870917,
+      "total_wall_seconds": 164.252708917,
+      "server_engine_equivalent": false
+    },
+    {
+      "model": "gpt-5.6-sol-ultrafast",
+      "passed": true,
+      "checker_scope": "release_dataset_public_and_private",
+      "coverage": "complete",
+      "output_token_reconciliation": "matched",
+      "target_micro_sessions": 8,
+      "target_output_tokens": 4422,
+      "target_provider_response_seconds": 22.377178,
+      "provider_lifecycle_output_tps": 197.61204920477462,
+      "all_model_provider_response_union_seconds": 28.193899,
+      "tool_union_seconds": 9.298,
+      "provider_tool_overlap_seconds": 6.342873,
+      "orchestration_residual_seconds": 4.635240333,
+      "total_wall_seconds": 35.784266333,
+      "server_engine_equivalent": false
+    }
+  ],
+  "comparison": {
+    "ultrafast_over_standard_provider_lifecycle_tps": 4.894851892505164,
+    "ultrafast_over_standard_target_provider_response_time": 0.15605426162338712,
+    "ultrafast_over_standard_tool_time": 0.7299992148857659,
+    "ultrafast_over_standard_total_wall_time": 0.2178610421036189
+  },
+  "output_root": "/Users/james/Library/Mobile Documents/com~apple~CloudDocs/Code/live-code-bench/LiveCodeBench/native-codex-q1-standard-vs-ultrafast-high-2026-07-13_173027"
+}

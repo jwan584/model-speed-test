@@ -1,0 +1,8 @@
+Implemented the complete solution in [solution.py](/Users/james/Library/Mobile%20Documents/com~apple~CloudDocs/Code/live-code-bench/LiveCodeBench/native-codex-gpt-5.6-sol-ultrafast-high-q1-5-2026-07-13_145017/q5_abc389_g/solution.py).
+
+Validated against:
+
+- All three provided samples
+- Edge case `N = 2`
+- Maximum size `N = 30` (about 0.8 seconds locally)
+- Python syntax and whitespace checks

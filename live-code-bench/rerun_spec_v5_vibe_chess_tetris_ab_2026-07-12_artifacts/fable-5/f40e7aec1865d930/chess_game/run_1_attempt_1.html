@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Two-Player Chess</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:linear-gradient(135deg,#1e2230 0%,#2a2f45 55%,#1b1f2e 100%);min-height:100vh;color:#e9eaf0;display:flex;flex-direction:column;align-items:center;padding:16px}
+header{text-align:center;margin-bottom:12px}
+h1{font-size:clamp(22px,4vw,32px);font-weight:700;letter-spacing:.5px}
+h1 em{color:#e2b96f;font-style:normal}
+.app{display:flex;gap:20px;align-items:flex-start;justify-content:center;flex-wrap:wrap;width:100%;max-width:1020px}
+.board-col{width:clamp(280px,min(94vw,calc(100dvh - 195px)),600px);display:flex;flex-direction:column;gap:10px}
+.status{padding:10px 14px;border-radius:10px;background:#23283a;font-weight:600;text-align:center;font-size:clamp(13px,2.2vw,16px);border:1px solid #343b55;transition:background .25s,color .25s}
+.status.check{background:#4a2530;border-color:#7c3a4a;color:#ffd3d3}
+.status.over{background:#2c3a2b;border-color:#4c6b48;color:#d9f0c9}
+.board-frame{position:relative;padding:10px;background:#3d2f23;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.06)}
+.board{display:grid;grid-template-columns:repeat(8,1fr);width:100%;aspect-ratio:1;border-radius:6px;overflow:hidden;container-type:inline-size;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.sq{position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer;aspect-ratio:1}
+.sq.light{background:#efd9b4}
+.sq.dark{background:#b08662}
+.sq.last{background-image:linear-gradient(rgba(246,214,80,.45),rgba(246,214,80,.45))}
+.sq.sel{background-image:linear-gradient(rgba(76,146,66,.55),rgba(76,146,66,.55))}
+.sq.check{background-image:radial-gradient(circle at 50% 50%,rgba(230,40,40,.75) 15%,rgba(230,40,40,.25) 55%,transparent 75%)}
+.sq.hint::after{content:'';position:absolute;width:30%;height:30%;border-radius:50%;background:rgba(30,30,30,.25)}
+.sq.cap::after{content:'';position:absolute;inset:4%;border-radius:50%;border:4px solid rgba(30,30,30,.28)}
+@supports (width:1cqw){.sq.cap::after{border-width:.9cqw}}
+.pc{font-size:min(9vw,44px);line-height:1;z-index:1;transition:transform .12s;pointer-events:none}
+@supports (font-size:1cqw){.pc{font-size:9.4cqw}}
+.sq.sel .pc{transform:scale(1.12)}
+.pc.w,.pp.w{color:#f9f9f7;text-shadow:0 1px 0 #555,0 -1px 0 #555,1px 0 0 #555,-1px 0 0 #555,0 2px 4px rgba(0,0,0,.45)}
+.pc.b,.pp.b{color:#17181c;text-shadow:0 1px 1px rgba(255,255,255,.18),0 2px 4px rgba(0,0,0,.45)}
+.lbl{position:absolute;font-weight:700;font-size:10px;pointer-events:none}
+@supports (width:1cqw){.lbl{font-size:clamp(8px,2cqw,14px)}}
+.lbl.rank{top:4%;left:6%}
+.lbl.file{bottom:3%;right:6%}
+.sq.light .lbl{color:#b08662}
+.sq.dark .lbl{color:#efd9b4}
+.promo{position:absolute;inset:0;background:rgba(10,12,20,.55);display:flex;align-items:center;justify-content:center;border-radius:14px;z-index:6}
+.promo.hidden{display:none}
+.promo-box{background:#262b3d;padding:18px 22px;border-radius:12px;text-align:center;box-shadow:0 12px 32px rgba(0,0,0,.5);border:1px solid #3c4468}
+.promo-box p{margin-bottom:10px;font-weight:600}
+.promo-btns{display:flex;gap:10px}
+.pp{font-size:38px;width:62px;height:62px;border-radius:10px;border:1px solid #47507a;background:#303752;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s,transform .15s}
+.pp:hover{background:#3d4668;transform:translateY(-2px)}
+.banner{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:5}
+.banner.hidden{display:none}
+.banner div{background:rgba(20,24,38,.9);padding:14px 26px;border-radius:12px;font-size:clamp(15px,2.6vw,20px);font-weight:700;border:1px solid #4c6b48;color:#d9f0c9;box-shadow:0 10px 30px rgba(0,0,0,.5);text-align:center}
+.side{width:300px;display:flex;flex-direction:column;gap:12px}
+.card{background:#23283a;border:1px solid #343b55;border-radius:12px;padding:12px 14px}
+.pname{display:flex;align-items:center;gap:8px;font-weight:700;margin-bottom:4px}
+.dot{width:10px;height:10px;border-radius:50%;background:#4a5170;transition:all .2s}
+.dot.active{background:#6ee26e;box-shadow:0 0 8px #6ee26e}
+.cap-row{min-height:26px;font-size:20px;letter-spacing:2px;display:flex;align-items:center;flex-wrap:wrap}
+.cap-row .cp{color:#cdd3ea;text-shadow:0 1px 2px rgba(0,0,0,.4)}
+.adv{font-size:13px;font-weight:700;color:#e2b96f;margin-left:8px;letter-spacing:0}
+.controls{display:flex;gap:10px}
+button.ctrl{flex:1;padding:10px 0;font-size:15px;font-weight:700;border:none;border-radius:10px;cursor:pointer;transition:transform .12s,filter .15s;color:#fff;font-family:inherit}
+button.ctrl:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.12)}
+button.ctrl:disabled{opacity:.45;cursor:not-allowed}
+#btnNew{background:#3f7d4b}
+#btnUndo{background:#5a5f7d}
+.history h3{font-size:13px;margin-bottom:8px;color:#aeb4cf;text-transform:uppercase;letter-spacing:1px}
+.hist{max-height:260px;overflow-y:auto;font-size:14px;line-height:1.7;font-variant-numeric:tabular-nums}
+.hist::-webkit-scrollbar{width:8px}
+.hist::-webkit-scrollbar-thumb{background:#3c4468;border-radius:4px}
+.hrow{display:grid;grid-template-columns:34px 1fr 1fr;padding:1px 6px;border-radius:6px}
+.hrow:nth-child(odd){background:rgba(255,255,255,.04)}
+.hnum{color:#8a90ad}
+.hist:empty::after{content:'No moves yet';color:#6b7191;font-style:italic;font-size:13px}
+@media (max-width:900px){.app{flex-direction:column;align-items:center}.side{width:clamp(280px,94vw,600px)}}
+</style>
+</head>
+<body>
+<header><h1><em>♞</em> Two-Player Chess</h1></header>
+<div class="app">
+  <div class="board-col">
+    <div id="status" class="status"></div>
+    <div class="board-frame">
+      <div id="board" class="board"></div>
+      <div id="banner" class="banner hidden"><div id="bannerText"></div></div>
+      <div id="promo" class="promo hidden">
+        <div class="promo-box">
+          <p>Promote pawn to</p>
+          <div class="promo-btns">
+            <button class="pp" data-p="Q"></button>
+            <button class="pp" data-p="R"></button>
+            <button class="pp" data-p="B"></button>
+            <button class="pp" data-p="N"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <aside class="side">
+    <div class="card">
+      <div class="pname"><span class="dot" id="dotB"></span>Black</div>
+      <div class="cap-row" id="capB"></div>
+    </div>
+    <div class="card">
+      <div class="pname"><span class="dot" id="dotW"></span>White</div>
+      <div class="cap-row" id="capW"></div>
+    </div>
+    <div class="controls">
+      <button class="ctrl" id="btnNew">New Game</button>
+      <button class="ctrl" id="btnUndo">Undo</button>
+    </div>
+    <div class="card history">
+      <h3>Move History</h3>
+      <div class="hist" id="hist"></div>
+    </div>
+  </aside>
+</div>
+
+<script>
+(function(){
+"use strict";
+const GLYPH={K:'♚',Q:'♛',R:'♜',B:'♝',N:'♞',P:'♟'};
+const VAL={P:1,N:3,B:3,R:5,Q:9,K:0};
+const FILES='abcdefgh';
+const inB=(r,c)=>r>=0&&r<8&&c>=0&&c<8;
+const OPP=c=>c==='w'?'b':'w';
+const N_OFF=[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+const K_OFF=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+const R_DIR=[[-1,0],[1,0],[0,-1],[0,1]];
+const B_DIR=[[-1,-1],[-1,1],[1,-1],[1,1]];
+const clone=o=>JSON.parse(JSON.stringify(o));
+
+let S, snapshots=[], selected=null, pendingPromo=null;
+
+function startBoard(){
+  const back=['R','N','B','Q','K','B','N','R'];
+  const b=Array.from({length:8},()=>Array(8).fill(null));
+  for(let c=0;c<8;c++){
+    b[0][c]={t:back[c],c:'b'}; b[1][c]={t:'P',c:'b'};
+    b[6][c]={t:'P',c:'w'};    b[7][c]={t:back[c],c:'w'};
+  }
+  return b;
+}
+function initState(){
+  return {board:startBoard(),turn:'w',castling:{K:true,Q:true,k:true,q:true},
+          ep:null,captured:{w:[],b:[]},moves:[],over:null,lastMove:null};
+}
+
+function isAttacked(b,r,c,by){
+  const pr=r+(by==='w'?1:-1);
+  for(const dc of[-1,1]){ if(inB(pr,c+dc)){const p=b[pr][c+dc]; if(p&&p.c===by&&p.t==='P')return true;} }
+  for(const[dr,dc]of N_OFF){const tr=r+dr,tc=c+dc; if(inB(tr,tc)){const p=b[tr][tc]; if(p&&p.c===by&&p.t==='N')return true;}}
+  for(const[dr,dc]of K_OFF){const tr=r+dr,tc=c+dc; if(inB(tr,tc)){const p=b[tr][tc]; if(p&&p.c===by&&p.t==='K')return true;}}
+  for(const[dr,dc]of R_DIR){let tr=r+dr,tc=c+dc; while(inB(tr,tc)){const p=b[tr][tc]; if(p){if(p.c===by&&(p.t==='R'||p.t==='Q'))return true; break;} tr+=dr;tc+=dc;}}
+  for(const[dr,dc]of B_DIR){let tr=r+dr,tc=c+dc; while(inB(tr,tc)){const p=b[tr][tc]; if(p){if(p.c===by&&(p.t==='B'||p.t==='Q'))return true; break;} tr+=dr;tc+=dc;}}
+  return false;
+}
+function findKing(b,color){
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=b[r][c]; if(p&&p.t==='K'&&p.c===color)return{r,c};}
+  return null;
+}
+function inCheck(st,color){const k=findKing(st.board,color); return k?isAttacked(st.board,k.r,k.c,OPP(color)):false;}
+
+function pseudoMoves(st,r,c){
+  const b=st.board,p=b[r][c],out=[];
+  const add=(tr,tc,f={})=>out.push(Object.assign({fr:r,fc:c,tr,tc,piece:p.t},f));
+  if(p.t==='P'){
+    const dir=p.c==='w'?-1:1, start=p.c==='w'?6:1, promoRow=p.c==='w'?0:7;
+    if(inB(r+dir,c)&&!b[r+dir][c]){
+      add(r+dir,c,{promo:r+dir===promoRow});
+      if(r===start&&!b[r+2*dir][c]) add(r+2*dir,c,{double:true});
+    }
+    for(const dc of[-1,1]){
+      const tr=r+dir,tc=c+dc;
+      if(!inB(tr,tc))continue;
+      if(b[tr][tc]&&b[tr][tc].c!==p.c) add(tr,tc,{capture:true,promo:tr===promoRow});
+      else if(st.ep&&st.ep.r===tr&&st.ep.c===tc) add(tr,tc,{capture:true,ep:true});
+    }
+  }else if(p.t==='N'||p.t==='K'){
+    for(const[dr,dc]of(p.t==='N'?N_OFF:K_OFF)){
+      const tr=r+dr,tc=c+dc;
+      if(inB(tr,tc)&&(!b[tr][tc]||b[tr][tc].c!==p.c)) add(tr,tc,{capture:!!b[tr][tc]});
+    }
+    if(p.t==='K'){
+      const row=p.c==='w'?7:0, opp=OPP(p.c), cr=st.castling;
+      const ks=p.c==='w'?cr.K:cr.k, qs=p.c==='w'?cr.Q:cr.q;
+      if(r===row&&c===4&&!isAttacked(b,row,4,opp)){
+        if(ks&&!b[row][5]&&!b[row][6]&&b[row][7]&&b[row][7].t==='R'&&b[row][7].c===p.c
+           &&!isAttacked(b,row,5,opp)&&!isAttacked(b,row,6,opp)) add(row,6,{castle:'K'});
+        if(qs&&!b[row][1]&&!b[row][2]&&!b[row][3]&&b[row][0]&&b[row][0].t==='R'&&b[row][0].c===p.c
+           &&!isAttacked(b,row,3,opp)&&!isAttacked(b,row,2,opp)) add(row,2,{castle:'Q'});
+      }
+    }
+  }else{
+    const dirs=p.t==='R'?R_DIR:p.t==='B'?B_DIR:R_DIR.concat(B_DIR);
+    for(const[dr,dc]of dirs){
+      let tr=r+dr,tc=c+dc;
+      while(inB(tr,tc)){
+        if(!b[tr][tc]) add(tr,tc);
+        else{ if(b[tr][tc].c!==p.c) add(tr,tc,{capture:true}); break; }
+        tr+=dr;tc+=dc;
+      }
+    }
+  }
+  return out;
+}
+function applyToBoard(b,mv,promo){
+  const p=b[mv.fr][mv.fc];
+  b[mv.tr][mv.tc]=mv.promo?{t:promo||'Q',c:p.c}:p;
+  b[mv.fr][mv.fc]=null;
+  if(mv.ep) b[mv.fr][mv.tc]=null;
+  if(mv.castle==='K'){ b[mv.fr][5]=b[mv.fr][7]; b[mv.fr][7]=null; }
+  if(mv.castle==='Q'){ b[mv.fr][3]=b[mv.fr][0]; b[mv.fr][0]=null; }
+}
+function legalMoves(st,r,c){
+  const color=st.board[r][c].c;
+  return pseudoMoves(st,r,c).filter(mv=>{
+    const b=st.board.map(row=>row.map(p=>p?{...p}:null));
+    applyToBoard(b,mv);
+    const k=findKing(b,color);
+    return !isAttacked(b,k.r,k.c,OPP(color));
+  });
+}
+function hasAnyLegal(st,color){
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+    const p=st.board[r][c];
+    if(p&&p.c===color&&legalMoves(st,r,c).length)return true;
+  }
+  return false;
+}
+function insufficient(b){
+  const pieces=[];
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=b[r][c]; if(p&&p.t!=='K')pieces.push({...p,sq:(r+c)%2});}
+  if(pieces.some(p=>p.t==='P'||p.t==='R'||p.t==='Q'))return false;
+  if(pieces.length<=1)return true;
+  if(pieces.every(p=>p.t==='B')&&pieces.every(p=>p.sq===pieces[0].sq))return true;
+  return false;
+}
+function sanBase(st,mv,promo){
+  if(mv.castle)return mv.castle==='K'?'O-O':'O-O-O';
+  const dest=FILES[mv.tc]+(8-mv.tr);
+  const cap=mv.capture||!!st.board[mv.tr][mv.tc];
+  if(mv.piece==='P'){
+    let s=cap?FILES[mv.fc]+'x'+dest:dest;
+    if(mv.promo)s+='='+(promo||'Q');
+    return s;
+  }
+  const others=[];
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+    if(r===mv.fr&&c===mv.fc)continue;
+    const p=st.board[r][c];
+    if(p&&p.t===mv.piece&&p.c===st.turn&&legalMoves(st,r,c).some(m=>m.tr===mv.tr&&m.tc===mv.tc))others.push({r,c});
+  }
+  let dis='';
+  if(others.length){
+    if(!others.some(o=>o.c===mv.fc))dis=FILES[mv.fc];
+    else if(!others.some(o=>o.r===mv.fr))dis=String(8-mv.fr);
+    else dis=FILES[mv.fc]+(8-mv.fr);
+  }
+  return mv.piece+dis+(cap?'x':'')+dest;
+}
+function makeMove(mv,promo){
+  snapshots.push(clone(S));
+  const mover=S.turn;
+  const san=sanBase(S,mv,promo);
+  const target=S.board[mv.tr][mv.tc];
+  if(target)S.captured[mover].push(target.t);
+  if(mv.ep)S.captured[mover].push('P');
+  applyToBoard(S.board,mv,promo);
+  const cr=S.castling;
+  if(mv.piece==='K'){ if(mover==='w'){cr.K=cr.Q=false;}else{cr.k=cr.q=false;} }
+  const corners=[[7,0,'Q'],[7,7,'K'],[0,0,'q'],[0,7,'k']];
+  for(const[r,c,key]of corners){
+    if((mv.fr===r&&mv.fc===c)||(mv.tr===r&&mv.tc===c))cr[key]=false;
+  }
+  S.ep=mv.double?{r:(mv.fr+mv.tr)/2,c:mv.fc}:null;
+  S.lastMove={fr:mv.fr,fc:mv.fc,tr:mv.tr,tc:mv.tc};
+  S.turn=OPP(mover);
+  const chk=inCheck(S,S.turn), any=hasAnyLegal(S,S.turn);
+  let suffix='';
+  if(chk&&!any){suffix='#';S.over={result:mover==='w'?'1–0':'0–1',text:'Checkmate — '+(mover==='w'?'White':'Black')+' wins!'};}
+  else if(!any){S.over={result:'½–½',text:'Stalemate — Draw'};}
+  else if(insufficient(S.board)){S.over={result:'½–½',text:'Draw — insufficient material'};}
+  else if(chk)suffix='+';
+  S.moves.push(san+suffix);
+  selected=null;
+  render();
+}
+
+/* ---------- DOM ---------- */
+const boardEl=document.getElementById('board'), statusEl=document.getElementById('status'),
+      histEl=document.getElementById('hist'), capW=document.getElementById('capW'), capB=document.getElementById('capB'),
+      dotW=document.getElementById('dotW'), dotB=document.getElementById('dotB'),
+      promoEl=document.getElementById('promo'), bannerEl=document.getElementById('banner'),
+      bannerText=document.getElementById('bannerText'),
+      btnNew=document.getElementById('btnNew'), btnUndo=document.getElementById('btnUndo');
+const SQ=[];
+for(let r=0;r<8;r++){SQ.push([]);
+  for(let c=0;c<8;c++){
+    const d=document.createElement('div');
+    d.className='sq';
+    if(c===0){const s=document.createElement('span');s.className='lbl rank';s.textContent=8-r;d.appendChild(s);}
+    if(r===7){const s=document.createElement('span');s.className='lbl file';s.textContent=FILES[c];d.appendChild(s);}
+    const pc=document.createElement('span');pc.className='pc';d.appendChild(pc);
+    d.addEventListener('click',((rr,cc)=>()=>onSquare(rr,cc))(r,c));
+    boardEl.appendChild(d);
+    SQ[r][c]={el:d,pc};
+  }
+}
+function onSquare(r,c){
+  if(S.over||pendingPromo)return;
+  if(selected){
+    const mv=selected.moves.find(m=>m.tr===r&&m.tc===c);
+    if(mv){
+      if(mv.promo){pendingPromo=mv;showPromo();return;}
+      makeMove(mv);return;
+    }
+    if(selected.r===r&&selected.c===c){selected=null;render();return;}
+  }
+  const p=S.board[r][c];
+  selected=(p&&p.c===S.turn)?{r,c,moves:legalMoves(S,r,c)}:null;
+  render();
+}
+function showPromo(){
+  document.querySelectorAll('.pp').forEach(b=>{
+    b.textContent=GLYPH[b.dataset.p];
+    b.className='pp '+S.turn;
+  });
+  promoEl.classList.remove('hidden');
+}
+document.querySelectorAll('.pp').forEach(b=>b.addEventListener('click',()=>{
+  if(!pendingPromo)return;
+  const mv=pendingPromo;pendingPromo=null;
+  promoEl.classList.add('hidden');
+  makeMove(mv,b.dataset.p);
+}));
+promoEl.addEventListener('click',e=>{
+  if(e.target===promoEl){pendingPromo=null;promoEl.classList.add('hidden');render();}
+});
+btnNew.addEventListener('click',()=>{
+  S=initState();snapshots=[];selected=null;pendingPromo=null;
+  promoEl.classList.add('hidden');render();
+});
+btnUndo.addEventListener('click',()=>{
+  if(pendingPromo){pendingPromo=null;promoEl.classList.add('hidden');}
+  if(snapshots.length){S=snapshots.pop();selected=null;render();}
+});
+
+function render(){
+  const targets=new Map();
+  if(selected)for(const m of selected.moves)targets.set(m.tr*8+m.tc,m);
+  const chk=inCheck(S,S.turn)?findKing(S.board,S.turn):null;
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+    let cls='sq '+((r+c)%2?'dark':'light');
+    if(selected&&selected.r===r&&selected.c===c)cls+=' sel';
+    else if(S.lastMove&&((S.lastMove.fr===r&&S.lastMove.fc===c)||(S.lastMove.tr===r&&S.lastMove.tc===c)))cls+=' last';
+    const mv=targets.get(r*8+c);
+    if(mv)cls+=(S.board[r][c]||mv.ep)?' cap':' hint';
+    if(chk&&chk.r===r&&chk.c===c)cls+=' check';
+    SQ[r][c].el.className=cls;
+    const p=S.board[r][c];
+    SQ[r][c].pc.textContent=p?GLYPH[p.t]:'';
+    SQ[r][c].pc.className=p?'pc '+p.c:'pc';
+  }
+  // status + banner
+  statusEl.className='status';
+  if(S.over){
+    statusEl.classList.add('over');
+    statusEl.textContent=S.over.text+'  ('+S.over.result+')';
+    bannerText.textContent=S.over.text;
+    bannerEl.classList.remove('hidden');
+  }else{
+    bannerEl.classList.add('hidden');
+    const who=S.turn==='w'?'White':'Black';
+    if(chk){statusEl.classList.add('check');statusEl.textContent=who+' to move — Check!';}
+    else statusEl.textContent=who+' to move';
+  }
+  dotW.classList.toggle('active',!S.over&&S.turn==='w');
+  dotB.classList.toggle('active',!S.over&&S.turn==='b');
+  // captured + material
+  const sum=a=>a.reduce((t,p)=>t+VAL[p],0);
+  const mw=sum(S.captured.w),mb=sum(S.captured.b);
+  const renderCap=(el,arr,adv)=>{
+    el.innerHTML=[...arr].sort((a,b)=>VAL[b]-VAL[a]).map(t=>'<span class="cp">'+GLYPH[t]+'</span>').join('')
+      +(adv>0?'<span class="adv">+'+adv+'</span>':'');
+  };
+  renderCap(capW,S.captured.w,mw-mb);
+  renderCap(capB,S.captured.b,mb-mw);
+  // history
+  let h='';
+  for(let i=0;i<S.moves.length;i+=2){
+    h+='<div class="hrow"><span class="hnum">'+(i/2+1)+'.</span><span>'+S.moves[i]+'</span><span>'+(S.moves[i+1]||'')+'</span></div>';
+  }
+  histEl.innerHTML=h;
+  histEl.scrollTop=histEl.scrollHeight;
+  btnUndo.disabled=snapshots.length===0;
+}
+
+S=initState();
+render();
+})();
+</script>
+</body>
+</html>

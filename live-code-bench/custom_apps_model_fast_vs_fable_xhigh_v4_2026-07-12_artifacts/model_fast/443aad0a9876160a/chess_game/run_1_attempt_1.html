@@ -1,0 +1,1966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#162033">
+  <title>Local Two-Player Chess</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #eef2f7;
+      --surface: rgba(255, 255, 255, 0.94);
+      --surface-strong: #ffffff;
+      --text: #172033;
+      --muted: #667085;
+      --line: #dfe5ed;
+      --accent: #6366f1;
+      --accent-dark: #4f46e5;
+      --light-square: #ede4d2;
+      --dark-square: #66837d;
+      --selected: #facc15;
+      --last-move: rgba(253, 224, 71, 0.47);
+      --legal: rgba(22, 31, 45, 0.32);
+      --capture: rgba(220, 38, 38, 0.75);
+      --danger: #dc2626;
+      --success: #059669;
+      --shadow: 0 22px 55px rgba(31, 41, 55, 0.14);
+      --small-shadow: 0 8px 24px rgba(31, 41, 55, 0.09);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      min-height: 100%;
+      background: var(--page);
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 12% 5%, rgba(99, 102, 241, 0.12), transparent 30rem),
+        radial-gradient(circle at 90% 95%, rgba(16, 185, 129, 0.1), transparent 28rem),
+        var(--page);
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .app {
+      width: min(1180px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 20px 0 28px;
+    }
+
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 48px;
+      height: 48px;
+      flex: 0 0 auto;
+      place-items: center;
+      color: #fff;
+      font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", serif;
+      font-size: 30px;
+      line-height: 1;
+      border-radius: 15px;
+      background: linear-gradient(145deg, #182235, #334155);
+      box-shadow: var(--small-shadow);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.35rem, 3vw, 2rem);
+      line-height: 1.08;
+      letter-spacing: -0.035em;
+    }
+
+    .subtitle {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 0.91rem;
+    }
+
+    .local-badge {
+      flex: 0 0 auto;
+      padding: 8px 11px;
+      color: #475467;
+      font-size: 0.78rem;
+      font-weight: 750;
+      letter-spacing: 0.035em;
+      text-transform: uppercase;
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.62);
+      box-shadow: 0 4px 16px rgba(31, 41, 55, 0.05);
+      backdrop-filter: blur(8px);
+    }
+
+    .game-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 350px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .board-column {
+      min-width: 0;
+    }
+
+    .board-wrap {
+      width: min(100%, calc(100vh - 150px), 700px);
+      margin-inline: auto;
+      container-type: inline-size;
+    }
+
+    .board-frame {
+      padding: 9px;
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      border-radius: 20px;
+      background: linear-gradient(145deg, #263447, #101827);
+      box-shadow: var(--shadow);
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      width: 100%;
+      aspect-ratio: 1;
+      overflow: hidden;
+      border-radius: 13px;
+      background: var(--dark-square);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .square {
+      position: relative;
+      display: grid;
+      min-width: 0;
+      min-height: 0;
+      padding: 0;
+      place-items: center;
+      color: inherit;
+      border: 0;
+      border-radius: 0;
+      outline: none;
+      cursor: pointer;
+      isolation: isolate;
+    }
+
+    .square.light {
+      background: var(--light-square);
+    }
+
+    .square.dark {
+      background: var(--dark-square);
+    }
+
+    .square.last-move::before {
+      position: absolute;
+      z-index: 0;
+      inset: 0;
+      content: "";
+      background: var(--last-move);
+      pointer-events: none;
+    }
+
+    .square.selected {
+      box-shadow: inset 0 0 0 max(4px, 1.2cqi) var(--selected);
+      z-index: 2;
+    }
+
+    .square.in-check {
+      background-image: radial-gradient(circle, rgba(239, 68, 68, 0.95) 0%, rgba(220, 38, 38, 0.62) 43%, transparent 74%);
+    }
+
+    .square.valid.empty::after {
+      position: absolute;
+      z-index: 3;
+      width: 26%;
+      aspect-ratio: 1;
+      content: "";
+      border-radius: 50%;
+      background: var(--legal);
+      pointer-events: none;
+    }
+
+    .square.valid.capture::after {
+      position: absolute;
+      z-index: 3;
+      inset: 7%;
+      content: "";
+      border: max(4px, 1.15cqi) solid var(--capture);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .square:hover {
+      filter: brightness(1.045);
+    }
+
+    .square:focus-visible {
+      z-index: 5;
+      box-shadow: inset 0 0 0 max(3px, 0.9cqi) #2563eb;
+    }
+
+    .piece {
+      position: relative;
+      z-index: 2;
+      display: block;
+      font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", "Apple Symbols", serif;
+      font-size: clamp(1.8rem, 10.7cqi, 5rem);
+      font-weight: 400;
+      line-height: 1;
+      transform: translateY(-1%);
+      pointer-events: none;
+    }
+
+    .white-piece {
+      color: #fbfdff;
+      text-shadow:
+        0 1px 0 #394458,
+        1px 0 0 #394458,
+        -1px 0 0 #394458,
+        0 -1px 0 #394458,
+        0 2px 3px rgba(15, 23, 42, 0.3);
+    }
+
+    .black-piece {
+      color: #172033;
+      text-shadow: 0 1px 1px rgba(255, 255, 255, 0.3);
+    }
+
+    .coordinate {
+      position: absolute;
+      z-index: 4;
+      font-size: clamp(0.56rem, 1.65cqi, 0.78rem);
+      font-weight: 800;
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    .rank-label {
+      top: 7%;
+      left: 7%;
+    }
+
+    .file-label {
+      right: 7%;
+      bottom: 6%;
+    }
+
+    .square.light .coordinate {
+      color: #53736d;
+    }
+
+    .square.dark .coordinate {
+      color: #f2e9d8;
+    }
+
+    .board-hint {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin: 11px 5px 0;
+      color: var(--muted);
+      font-size: 0.79rem;
+    }
+
+    .sidebar {
+      display: grid;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .card {
+      overflow: hidden;
+      border: 1px solid rgba(219, 226, 235, 0.92);
+      border-radius: 17px;
+      background: var(--surface);
+      box-shadow: var(--small-shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .status-card {
+      padding: 18px;
+    }
+
+    .status-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .status-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      min-width: 0;
+    }
+
+    .status-icon {
+      display: grid;
+      width: 39px;
+      height: 39px;
+      flex: 0 0 auto;
+      place-items: center;
+      color: #fff;
+      font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", serif;
+      font-size: 24px;
+      line-height: 1;
+      border-radius: 11px;
+      background: #263447;
+    }
+
+    .status-title {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 800;
+      letter-spacing: -0.015em;
+    }
+
+    .status-message {
+      min-height: 2.6em;
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.45;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 0 5px rgba(5, 150, 105, 0.12);
+    }
+
+    .status-dot.check {
+      background: #f59e0b;
+      box-shadow: 0 0 0 5px rgba(245, 158, 11, 0.14);
+    }
+
+    .status-dot.over {
+      background: var(--danger);
+      box-shadow: 0 0 0 5px rgba(220, 38, 38, 0.12);
+    }
+
+    .turn-strip {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .turn-player {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      padding: 9px 10px;
+      color: var(--muted);
+      font-size: 0.81rem;
+      font-weight: 700;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: #f8fafc;
+      transition: 150ms ease;
+    }
+
+    .turn-player.active {
+      color: var(--text);
+      border-color: rgba(99, 102, 241, 0.38);
+      background: rgba(99, 102, 241, 0.09);
+      box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.08);
+    }
+
+    .turn-symbol {
+      font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", serif;
+      font-size: 1.35rem;
+      line-height: 1;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+      margin-top: 14px;
+    }
+
+    .control-button {
+      min-height: 42px;
+      padding: 9px 13px;
+      font-size: 0.84rem;
+      font-weight: 760;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      cursor: pointer;
+      transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+    }
+
+    .control-button:hover:not(:disabled) {
+      transform: translateY(-1px);
+    }
+
+    .control-button:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .control-button.primary {
+      color: #fff;
+      border-color: var(--accent-dark);
+      background: linear-gradient(145deg, var(--accent), var(--accent-dark));
+    }
+
+    .control-button.secondary {
+      color: #344054;
+      background: #fff;
+    }
+
+    .control-button.secondary:hover:not(:disabled) {
+      border-color: #c4cad4;
+      background: #f8fafc;
+    }
+
+    .control-button:focus-visible,
+    .promotion-button:focus-visible {
+      outline: 3px solid rgba(37, 99, 235, 0.27);
+      outline-offset: 2px;
+    }
+
+    .control-button:disabled {
+      color: #98a2b3;
+      cursor: not-allowed;
+      background: #f2f4f7;
+      opacity: 0.8;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 14px 16px 11px;
+      border-bottom: 1px solid #edf0f4;
+    }
+
+    .card-header h2 {
+      margin: 0;
+      font-size: 0.91rem;
+      letter-spacing: -0.01em;
+    }
+
+    .card-kicker {
+      color: var(--muted);
+      font-size: 0.73rem;
+      font-weight: 700;
+    }
+
+    .captured-content {
+      display: grid;
+      gap: 0;
+    }
+
+    .captured-row {
+      min-height: 61px;
+      padding: 11px 16px;
+    }
+
+    .captured-row + .captured-row {
+      border-top: 1px solid #edf0f4;
+    }
+
+    .captured-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 5px;
+      color: #475467;
+      font-size: 0.74rem;
+      font-weight: 750;
+    }
+
+    .captured-pieces {
+      display: flex;
+      min-height: 26px;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1px;
+    }
+
+    .captured-piece {
+      display: inline-block;
+      width: 23px;
+      font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", serif;
+      font-size: 1.5rem;
+      line-height: 1;
+      text-align: center;
+    }
+
+    .empty-captured {
+      color: #98a2b3;
+      font-size: 0.78rem;
+      font-style: italic;
+    }
+
+    .history-card {
+      min-height: 195px;
+    }
+
+    .history-scroll {
+      max-height: 278px;
+      overflow: auto;
+      scrollbar-color: #c5ccd6 transparent;
+      scrollbar-width: thin;
+    }
+
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 0.82rem;
+    }
+
+    .history-table th {
+      position: sticky;
+      z-index: 2;
+      top: 0;
+      padding: 8px 10px;
+      color: var(--muted);
+      font-size: 0.68rem;
+      letter-spacing: 0.04em;
+      text-align: left;
+      text-transform: uppercase;
+      background: rgba(248, 250, 252, 0.97);
+      border-bottom: 1px solid #edf0f4;
+    }
+
+    .history-table th:first-child,
+    .history-table td:first-child {
+      width: 44px;
+      color: #98a2b3;
+      text-align: center;
+    }
+
+    .history-table td {
+      height: 34px;
+      padding: 7px 10px;
+      font-variant-numeric: tabular-nums;
+      border-bottom: 1px solid #f1f3f6;
+    }
+
+    .history-table tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .history-table td.latest {
+      color: var(--accent-dark);
+      font-weight: 800;
+      background: rgba(99, 102, 241, 0.06);
+    }
+
+    .history-empty {
+      height: 112px !important;
+      color: #98a2b3 !important;
+      font-style: italic;
+      text-align: center !important;
+    }
+
+    .modal {
+      position: fixed;
+      z-index: 100;
+      inset: 0;
+      display: grid;
+      padding: 20px;
+      place-items: center;
+      background: rgba(15, 23, 42, 0.62);
+      backdrop-filter: blur(6px);
+    }
+
+    .modal[hidden] {
+      display: none;
+    }
+
+    .promotion-dialog {
+      width: min(420px, 100%);
+      padding: 22px;
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      border-radius: 20px;
+      background: #fff;
+      box-shadow: 0 28px 80px rgba(15, 23, 42, 0.32);
+    }
+
+    .promotion-dialog h2 {
+      margin: 0;
+      font-size: 1.18rem;
+    }
+
+    .promotion-dialog p {
+      margin: 6px 0 18px;
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
+
+    .promotion-options {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 9px;
+    }
+
+    .promotion-button {
+      display: grid;
+      aspect-ratio: 1;
+      padding: 4px;
+      place-items: center;
+      font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", serif;
+      font-size: clamp(2.3rem, 12vw, 3.7rem);
+      line-height: 1;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #f8fafc;
+      cursor: pointer;
+      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+    }
+
+    .promotion-button:hover {
+      transform: translateY(-2px);
+      border-color: rgba(99, 102, 241, 0.45);
+      background: rgba(99, 102, 241, 0.08);
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (max-width: 900px) {
+      .game-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .board-wrap {
+        width: min(100%, 690px);
+      }
+
+      .sidebar {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .history-card {
+        grid-column: 1 / -1;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .app {
+        width: min(100% - 16px, 1180px);
+        padding-top: 12px;
+      }
+
+      .app-header {
+        margin: 0 5px 13px;
+      }
+
+      .brand-mark {
+        width: 42px;
+        height: 42px;
+        font-size: 26px;
+        border-radius: 13px;
+      }
+
+      .subtitle {
+        display: none;
+      }
+
+      .local-badge {
+        padding: 7px 9px;
+        font-size: 0.66rem;
+      }
+
+      .game-layout {
+        gap: 14px;
+      }
+
+      .board-frame {
+        padding: 5px;
+        border-radius: 14px;
+      }
+
+      .board {
+        border-radius: 10px;
+      }
+
+      .board-hint {
+        margin-top: 9px;
+        font-size: 0.72rem;
+      }
+
+      .sidebar {
+        grid-template-columns: 1fr;
+      }
+
+      .history-card {
+        grid-column: auto;
+      }
+
+      .history-scroll {
+        max-height: 240px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        transition: none !important;
+        animation: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">♞</div>
+        <div>
+          <h1>Two-Player Chess</h1>
+          <p class="subtitle">A complete local game for two players on one device</p>
+        </div>
+      </div>
+      <div class="local-badge">Local game</div>
+    </header>
+
+    <div class="game-layout">
+      <section class="board-column" aria-label="Chess board area">
+        <div class="board-wrap">
+          <div class="board-frame">
+            <div id="board" class="board" role="grid" aria-label="Chess board"></div>
+          </div>
+          <div class="board-hint">
+            <span>Select a piece to view legal moves</span>
+            <span>White plays from the bottom</span>
+          </div>
+        </div>
+      </section>
+
+      <aside class="sidebar" aria-label="Game information and controls">
+        <section class="card status-card">
+          <div class="status-heading">
+            <div class="status-title-wrap">
+              <div id="statusIcon" class="status-icon" aria-hidden="true">♔</div>
+              <div>
+                <h2 id="statusTitle" class="status-title">White to move</h2>
+                <p id="statusMessage" class="status-message" aria-live="polite">White to move.</p>
+              </div>
+            </div>
+            <span id="statusDot" class="status-dot" aria-hidden="true"></span>
+          </div>
+
+          <div class="turn-strip" aria-label="Players">
+            <div id="whitePlayer" class="turn-player active">
+              <span class="turn-symbol white-piece" aria-hidden="true">♔</span>
+              <span>White</span>
+            </div>
+            <div id="blackPlayer" class="turn-player">
+              <span class="turn-symbol black-piece" aria-hidden="true">♚</span>
+              <span>Black</span>
+            </div>
+          </div>
+
+          <div class="controls">
+            <button id="newGameButton" class="control-button primary" type="button">New Game</button>
+            <button id="undoButton" class="control-button secondary" type="button" disabled>Undo</button>
+          </div>
+        </section>
+
+        <section class="card captured-card">
+          <div class="card-header">
+            <h2>Captured Pieces</h2>
+            <span class="card-kicker">Material</span>
+          </div>
+          <div id="capturedContent" class="captured-content"></div>
+        </section>
+
+        <section class="card history-card">
+          <div class="card-header">
+            <h2>Move History</h2>
+            <span id="moveCount" class="card-kicker">0 moves</span>
+          </div>
+          <div id="historyScroll" class="history-scroll">
+            <table class="history-table" aria-label="Move history">
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col">White</th>
+                  <th scope="col">Black</th>
+                </tr>
+              </thead>
+              <tbody id="historyBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <div id="promotionModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="promotionTitle" hidden>
+    <div class="promotion-dialog">
+      <h2 id="promotionTitle">Choose a promotion</h2>
+      <p>Promote your pawn to one of these pieces.</p>
+      <div id="promotionOptions" class="promotion-options"></div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const FILES = "abcdefgh";
+      const PROMOTIONS = ["q", "r", "b", "n"];
+      const PIECE_NAMES = {
+        p: "pawn",
+        n: "knight",
+        b: "bishop",
+        r: "rook",
+        q: "queen",
+        k: "king"
+      };
+      const PIECE_LETTERS = {
+        n: "N",
+        b: "B",
+        r: "R",
+        q: "Q",
+        k: "K"
+      };
+      const SYMBOLS = {
+        w: { k: "♔", q: "♕", r: "♖", b: "♗", n: "♘", p: "♙" },
+        b: { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" }
+      };
+      const VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+
+      const boardElement = document.getElementById("board");
+      const statusTitle = document.getElementById("statusTitle");
+      const statusMessage = document.getElementById("statusMessage");
+      const statusIcon = document.getElementById("statusIcon");
+      const statusDot = document.getElementById("statusDot");
+      const whitePlayer = document.getElementById("whitePlayer");
+      const blackPlayer = document.getElementById("blackPlayer");
+      const capturedContent = document.getElementById("capturedContent");
+      const historyBody = document.getElementById("historyBody");
+      const historyScroll = document.getElementById("historyScroll");
+      const moveCount = document.getElementById("moveCount");
+      const newGameButton = document.getElementById("newGameButton");
+      const undoButton = document.getElementById("undoButton");
+      const promotionModal = document.getElementById("promotionModal");
+      const promotionOptions = document.getElementById("promotionOptions");
+      const promotionTitle = document.getElementById("promotionTitle");
+
+      let state;
+      let selectedSquare = null;
+      let selectedMoves = [];
+      let pendingPromotion = null;
+
+      function colorName(color) {
+        return color === "w" ? "White" : "Black";
+      }
+
+      function opposite(color) {
+        return color === "w" ? "b" : "w";
+      }
+
+      function inBounds(row, col) {
+        return row >= 0 && row < 8 && col >= 0 && col < 8;
+      }
+
+      function squareName(row, col) {
+        return FILES[col] + (8 - row);
+      }
+
+      function cloneBoard(board) {
+        return board.map(row => row.map(piece => piece ? { ...piece } : null));
+      }
+
+      function createInitialBoard() {
+        const board = Array.from({ length: 8 }, () => Array(8).fill(null));
+        const backRank = ["r", "n", "b", "q", "k", "b", "n", "r"];
+
+        for (let col = 0; col < 8; col++) {
+          board[0][col] = { type: backRank[col], color: "b" };
+          board[1][col] = { type: "p", color: "b" };
+          board[6][col] = { type: "p", color: "w" };
+          board[7][col] = { type: backRank[col], color: "w" };
+        }
+
+        return board;
+      }
+
+      function createGameState() {
+        return {
+          board: createInitialBoard(),
+          turn: "w",
+          castling: {
+            w: { k: true, q: true },
+            b: { k: true, q: true }
+          },
+          enPassant: null,
+          halfmove: 0,
+          fullmove: 1,
+          capturedBy: { w: [], b: [] },
+          moves: [],
+          lastMove: null,
+          undoStack: [],
+          positionCounts: {},
+          check: false,
+          gameOver: false,
+          outcome: null,
+          status: "White to move."
+        };
+      }
+
+      function positionKey() {
+        const rows = [];
+
+        for (let row = 0; row < 8; row++) {
+          let result = "";
+          let empty = 0;
+
+          for (let col = 0; col < 8; col++) {
+            const piece = state.board[row][col];
+
+            if (!piece) {
+              empty++;
+              continue;
+            }
+
+            if (empty) {
+              result += empty;
+              empty = 0;
+            }
+
+            const symbol = piece.color === "w"
+              ? piece.type.toUpperCase()
+              : piece.type;
+            result += symbol;
+          }
+
+          if (empty) result += empty;
+          rows.push(result);
+        }
+
+        let rights = "";
+        if (state.castling.w.k) rights += "K";
+        if (state.castling.w.q) rights += "Q";
+        if (state.castling.b.k) rights += "k";
+        if (state.castling.b.q) rights += "q";
+        if (!rights) rights = "-";
+
+        const ep = state.enPassant
+          ? squareName(state.enPassant.r, state.enPassant.c)
+          : "-";
+
+        return `${rows.join("/")} ${state.turn} ${rights} ${ep}`;
+      }
+
+      function resetGame() {
+        state = createGameState();
+        state.positionCounts[positionKey()] = 1;
+        selectedSquare = null;
+        selectedMoves = [];
+        closePromotion();
+        evaluatePosition();
+        render();
+      }
+
+      function snapshotState() {
+        return {
+          board: cloneBoard(state.board),
+          turn: state.turn,
+          castling: {
+            w: { ...state.castling.w },
+            b: { ...state.castling.b }
+          },
+          enPassant: state.enPassant ? { ...state.enPassant } : null,
+          halfmove: state.halfmove,
+          fullmove: state.fullmove,
+          capturedBy: {
+            w: state.capturedBy.w.map(piece => ({ ...piece })),
+            b: state.capturedBy.b.map(piece => ({ ...piece }))
+          },
+          moves: [...state.moves],
+          lastMove: state.lastMove
+            ? {
+                from: { ...state.lastMove.from },
+                to: { ...state.lastMove.to }
+              }
+            : null,
+          positionCounts: { ...state.positionCounts },
+          check: state.check,
+          gameOver: state.gameOver,
+          outcome: state.outcome,
+          status: state.status
+        };
+      }
+
+      function restoreSnapshot(snapshot) {
+        state.board = snapshot.board;
+        state.turn = snapshot.turn;
+        state.castling = snapshot.castling;
+        state.enPassant = snapshot.enPassant;
+        state.halfmove = snapshot.halfmove;
+        state.fullmove = snapshot.fullmove;
+        state.capturedBy = snapshot.capturedBy;
+        state.moves = snapshot.moves;
+        state.lastMove = snapshot.lastMove;
+        state.positionCounts = snapshot.positionCounts;
+        state.check = snapshot.check;
+        state.gameOver = snapshot.gameOver;
+        state.outcome = snapshot.outcome;
+        state.status = snapshot.status;
+      }
+
+      function undoMove() {
+        closePromotion();
+
+        if (!state.undoStack.length) return;
+
+        const snapshot = state.undoStack.pop();
+        restoreSnapshot(snapshot);
+        selectedSquare = null;
+        selectedMoves = [];
+        render();
+      }
+
+      function isSquareAttacked(board, row, col, byColor) {
+        const pawnDirection = byColor === "w" ? -1 : 1;
+        const pawnSourceRow = row - pawnDirection;
+
+        for (const dc of [-1, 1]) {
+          const sourceCol = col - dc;
+          if (inBounds(pawnSourceRow, sourceCol)) {
+            const piece = board[pawnSourceRow][sourceCol];
+            if (piece && piece.color === byColor && piece.type === "p") {
+              return true;
+            }
+          }
+        }
+
+        const knightOffsets = [
+          [-2, -1], [-2, 1], [-1, -2], [-1, 2],
+          [1, -2], [1, 2], [2, -1], [2, 1]
+        ];
+
+        for (const [dr, dc] of knightOffsets) {
+          const r = row + dr;
+          const c = col + dc;
+          if (!inBounds(r, c)) continue;
+          const piece = board[r][c];
+          if (piece && piece.color === byColor && piece.type === "n") {
+            return true;
+          }
+        }
+
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            if (dr === 0 && dc === 0) continue;
+            const r = row + dr;
+            const c = col + dc;
+            if (!inBounds(r, c)) continue;
+            const piece = board[r][c];
+            if (piece && piece.color === byColor && piece.type === "k") {
+              return true;
+            }
+          }
+        }
+
+        const orthogonal = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        const diagonal = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+
+        for (const [dr, dc] of orthogonal) {
+          let r = row + dr;
+          let c = col + dc;
+
+          while (inBounds(r, c)) {
+            const piece = board[r][c];
+            if (piece) {
+              if (
+                piece.color === byColor &&
+                (piece.type === "r" || piece.type === "q")
+              ) {
+                return true;
+              }
+              break;
+            }
+            r += dr;
+            c += dc;
+          }
+        }
+
+        for (const [dr, dc] of diagonal) {
+          let r = row + dr;
+          let c = col + dc;
+
+          while (inBounds(r, c)) {
+            const piece = board[r][c];
+            if (piece) {
+              if (
+                piece.color === byColor &&
+                (piece.type === "b" || piece.type === "q")
+              ) {
+                return true;
+              }
+              break;
+            }
+            r += dr;
+            c += dc;
+          }
+        }
+
+        return false;
+      }
+
+      function findKing(board, color) {
+        for (let row = 0; row < 8; row++) {
+          for (let col = 0; col < 8; col++) {
+            const piece = board[row][col];
+            if (piece && piece.color === color && piece.type === "k") {
+              return { r: row, c: col };
+            }
+          }
+        }
+        return null;
+      }
+
+      function isInCheck(color, board = state.board) {
+        const king = findKing(board, color);
+        if (!king) return true;
+        return isSquareAttacked(board, king.r, king.c, opposite(color));
+      }
+
+      function createMove(fromRow, fromCol, toRow, toCol, extras = {}) {
+        return {
+          from: { r: fromRow, c: fromCol },
+          to: { r: toRow, c: toCol },
+          promotion: null,
+          special: null,
+          ...extras
+        };
+      }
+
+      function generatePseudoMoves(row, col) {
+        const board = state.board;
+        const piece = board[row][col];
+        if (!piece) return [];
+
+        const moves = [];
+        const color = piece.color;
+        const enemy = opposite(color);
+
+        const addNormalMove = (toRow, toCol, extras = {}) => {
+          if (!inBounds(toRow, toCol)) return;
+          const target = board[toRow][toCol];
+          if (!target || target.color !== color) {
+            moves.push(createMove(row, col, toRow, toCol, extras));
+          }
+        };
+
+        const addPromotionMoves = (toRow, toCol, extras = {}) => {
+          for (const promotion of PROMOTIONS) {
+            moves.push(
+              createMove(row, col, toRow, toCol, {
+                ...extras,
+                promotion
+              })
+            );
+          }
+        };
+
+        if (piece.type === "p") {
+          const direction = color === "w" ? -1 : 1;
+          const startRow = color === "w" ? 6 : 1;
+          const promotionRow = color === "w" ? 0 : 7;
+          const oneStep = row + direction;
+
+          if (inBounds(oneStep, col) && !board[oneStep][col]) {
+            if (oneStep === promotionRow) {
+              addPromotionMoves(oneStep, col);
+            } else {
+              moves.push(createMove(row, col, oneStep, col));
+            }
+
+            const twoStep = row + direction * 2;
+            if (row === startRow && !board[twoStep][col]) {
+              moves.push(createMove(row, col, twoStep, col, { special: "double-pawn" }));
+            }
+          }
+
+          for (const dc of [-1, 1]) {
+            const targetRow = row + direction;
+            const targetCol = col + dc;
+            if (!inBounds(targetRow, targetCol)) continue;
+
+            const target = board[targetRow][targetCol];
+            if (target && target.color === enemy) {
+              if (targetRow === promotionRow) {
+                addPromotionMoves(targetRow, targetCol);
+              } else {
+                moves.push(createMove(row, col, targetRow, targetCol));
+              }
+            }
+
+            if (
+              state.enPassant &&
+              state.enPassant.r === targetRow &&
+              state.enPassant.c === targetCol
+            ) {
+              const adjacent = board[row][targetCol];
+              if (adjacent && adjacent.type === "p" && adjacent.color === enemy) {
+                moves.push(
+                  createMove(row, col, targetRow, targetCol, {
+                    special: "en-passant"
+                  })
+                );
+              }
+            }
+          }
+        }
+
+        if (piece.type === "n") {
+          const offsets = [
+            [-2, -1], [-2, 1], [-1, -2], [-1, 2],
+            [1, -2], [1, 2], [2, -1], [2, 1]
+          ];
+          for (const [dr, dc] of offsets) {
+            addNormalMove(row + dr, col + dc);
+          }
+        }
+
+        if (piece.type === "b" || piece.type === "r" || piece.type === "q") {
+          const directions = [];
+
+          if (piece.type === "b" || piece.type === "q") {
+            directions.push([-1, -1], [-1, 1], [1, -1], [1, 1]);
+          }
+
+          if (piece.type === "r" || piece.type === "q") {
+            directions.push([-1, 0], [1, 0], [0, -1], [0, 1]);
+          }
+
+          for (const [dr, dc] of directions) {
+            let targetRow = row + dr;
+            let targetCol = col + dc;
+
+            while (inBounds(targetRow, targetCol)) {
+              const target = board[targetRow][targetCol];
+
+              if (!target) {
+                moves.push(createMove(row, col, targetRow, targetCol));
+              } else {
+                if (target.color !== color) {
+                  moves.push(createMove(row, col, targetRow, targetCol));
+                }
+                break;
+              }
+
+              targetRow += dr;
+              targetCol += dc;
+            }
+          }
+        }
+
+        if (piece.type === "k") {
+          for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+              if (dr === 0 && dc === 0) continue;
+              addNormalMove(row + dr, col + dc);
+            }
+          }
+
+          const homeRow = color === "w" ? 7 : 0;
+          const rights = state.castling[color];
+
+          if (row === homeRow && col === 4 && !isInCheck(color, board)) {
+            const kingSideRook = board[homeRow][7];
+            if (
+              rights.k &&
+              kingSideRook &&
+              kingSideRook.color === color &&
+              kingSideRook.type === "r" &&
+              !board[homeRow][5] &&
+              !board[homeRow][6] &&
+              !isSquareAttacked(board, homeRow, 5, enemy) &&
+              !isSquareAttacked(board, homeRow, 6, enemy)
+            ) {
+              moves.push(
+                createMove(row, col, homeRow, 6, {
+                  special: "castle-kingside"
+                })
+              );
+            }
+
+            const queenSideRook = board[homeRow][0];
+            if (
+              rights.q &&
+              queenSideRook &&
+              queenSideRook.color === color &&
+              queenSideRook.type === "r" &&
+              !board[homeRow][1] &&
+              !board[homeRow][2] &&
+              !board[homeRow][3] &&
+              !isSquareAttacked(board, homeRow, 3, enemy) &&
+              !isSquareAttacked(board, homeRow, 2, enemy)
+            ) {
+              moves.push(
+                createMove(row, col, homeRow, 2, {
+                  special: "castle-queenside"
+                })
+              );
+            }
+          }
+        }
+
+        return moves;
+      }
+
+      function applyMoveToBoard(board, move) {
+        const movingPiece = board[move.from.r][move.from.c];
+        if (!movingPiece) return;
+
+        const piece = { ...movingPiece };
+        board[move.from.r][move.from.c] = null;
+
+        if (move.special === "en-passant") {
+          board[move.from.r][move.to.c] = null;
+        }
+
+        if (move.special === "castle-kingside") {
+          const rook = board[move.from.r][7];
+          board[move.from.r][7] = null;
+          board[move.from.r][5] = rook ? { ...rook } : null;
+        }
+
+        if (move.special === "castle-queenside") {
+          const rook = board[move.from.r][0];
+          board[move.from.r][0] = null;
+          board[move.from.r][3] = rook ? { ...rook } : null;
+        }
+
+        if (move.promotion) {
+          piece.type = move.promotion;
+        }
+
+        board[move.to.r][move.to.c] = piece;
+      }
+
+      function getLegalMoves(row, col) {
+        const piece = state.board[row][col];
+        if (!piece) return [];
+
+        const pseudoMoves = generatePseudoMoves(row, col);
+        return pseudoMoves.filter(move => {
+          const testBoard = cloneBoard(state.board);
+          applyMoveToBoard(testBoard, move);
+          return !isInCheck(piece.color, testBoard);
+        });
+      }
+
+      function hasAnyLegalMove(color) {
+        for (let row = 0; row < 8; row++) {
+          for (let col = 0; col < 8; col++) {
+            const piece = state.board[row][col];
+            if (piece && piece.color === color && getLegalMoves(row, col).length) {
+              return true;
+            }
+          }
+        }
+        return false;
+      }
+
+      function isInsufficientMaterial() {
+        const nonKings = [];
+
+        for (let row = 0; row < 8; row++) {
+          for (let col = 0; col < 8; col++) {
+            const piece = state.board[row][col];
+            if (piece && piece.type !== "k") {
+              nonKings.push({ ...piece, row, col });
+            }
+          }
+        }
+
+        if (nonKings.length === 0) return true;
+
+        if (
+          nonKings.length === 1 &&
+          (nonKings[0].type === "b" || nonKings[0].type === "n")
+        ) {
+          return true;
+        }
+
+        if (nonKings.every(piece => piece.type === "b")) {
+          const squareColors = new Set(
+            nonKings.map(piece => (piece.row + piece.col) % 2)
+          );
+          return squareColors.size === 1;
+        }
+
+        return false;
+      }
+
+      function evaluatePosition() {
+        state.check = isInCheck(state.turn);
+        state.gameOver = false;
+        state.outcome = null;
+
+        const hasMove = hasAnyLegalMove(state.turn);
+
+        if (!hasMove) {
+          state.gameOver = true;
+
+          if (state.check) {
+            state.outcome = "checkmate";
+            state.status = `Checkmate — ${colorName(opposite(state.turn))} wins.`;
+          } else {
+            state.outcome = "stalemate";
+            state.status = "Draw — stalemate.";
+          }
+          return;
+        }
+
+        if (isInsufficientMaterial()) {
+          state.gameOver = true;
+          state.outcome = "insufficient";
+          state.status = "Draw — insufficient mating material.";
+          return;
+        }
+
+        if (state.halfmove >= 100) {
+          state.gameOver = true;
+          state.outcome = "fifty-move";
+          state.status = "Draw — fifty-move rule.";
+          return;
+        }
+
+        const key = positionKey();
+        if ((state.positionCounts[key] || 0) >= 3) {
+          state.gameOver = true;
+          state.outcome = "threefold";
+          state.status = "Draw — threefold repetition.";
+          return;
+        }
+
+        if (state.check) {
+          state.status = `${colorName(state.turn)} is in check and must respond.`;
+        } else {
+          state.status = `${colorName(state.turn)} to move.`;
+        }
+      }
+
+      function updateCastlingRights(movingPiece, capturedPiece, move) {
+        const color = movingPiece.color;
+
+        if (movingPiece.type === "k") {
+          state.castling[color].k = false;
+          state.castling[color].q = false;
+        }
+
+        if (movingPiece.type === "r") {
+          const homeRow = color === "w" ? 7 : 0;
+          if (move.from.r === homeRow && move.from.c === 0) {
+            state.castling[color].q = false;
+          }
+          if (move.from.r === homeRow && move.from.c === 7) {
+            state.castling[color].k = false;
+          }
+        }
+
+        if (capturedPiece && capturedPiece.type === "r") {
+          const capturedColor = capturedPiece.color;
+          const homeRow = capturedColor === "w" ? 7 : 0;
+
+          if (move.to.r === homeRow && move.to.c === 0) {
+            state.castling[capturedColor].q = false;
+          }
+          if (move.to.r === homeRow && move.to.c === 7) {
+            state.castling[capturedColor].k = false;
+          }
+        }
+      }
+
+      function getDisambiguation(move, movingPiece) {
+        const alternatives = [];
+
+        for (let row = 0; row < 8; row++) {
+          for (let col = 0; col < 8; col++) {
+            if (row === move.from.r && col === move.from.c) continue;
+
+            const piece = state.board[row][col];
+            if (
+              !piece ||
+              piece.color !== movingPiece.color ||
+              piece.type !== movingPiece.type
+            ) {
+              continue;
+            }
+
+            const legal = getLegalMoves(row, col);
+            if (legal.some(candidate =>
+              candidate.to.r === move.to.r &&
+              candidate.to.c === move.to.c
+            )) {
+              alternatives.push({ r: row, c: col });
+            }
+          }
+        }
+
+        if (!alternatives.length) return "";
+
+        const sameFile = alternatives.some(square => square.c === move.from.c);
+        const sameRank = alternatives.some(square => square.r === move.from.r);
+
+        if (!sameFile) return FILES[move.from.c];
+        if (!sameRank) return String(8 - move.from.r);
+        return FILES[move.from.c] + (8 - move.from.r);
+      }
+
+      function buildMoveNotation(move) {
+        const movingPiece = state.board[move.from.r][move.from.c];
+
+        if (move.special === "castle-kingside") return "O-O";
+        if (move.special === "castle-queenside") return "O-O-O";
+
+        const target = move.special === "en-passant"
+          ? state.board[move.from.r][move.to.c]
+          : state.board[move.to.r][move.to.c];
+        const isCapture = Boolean(target);
+        const destination = squareName(move.to.r, move.to.c);
+        let notation = "";
+
+        if (movingPiece.type === "p") {
+          if (isCapture) notation += FILES[move.from.c] + "x";
+          notation += destination;
+        } else {
+          notation += PIECE_LETTERS[movingPiece.type];
+          notation += getDisambiguation(move, movingPiece);
+          if (isCapture) notation += "x";
+          notation += destination;
+        }
+
+        if (move.promotion) {
+          notation += "=" + move.promotion.toUpperCase();
+        }
+
+        return notation;
+      }
+
+      function executeMove(move) {
+        if (state.gameOver) return;
+
+        state.undoStack.push(snapshotState());
+
+        const movingPiece = state.board[move.from.r][move.from.c];
+        const capturedPiece = move.special === "en-passant"
+          ? state.board[move.from.r][move.to.c]
+          : state.board[move.to.r][move.to.c];
+        const baseNotation = buildMoveNotation(move);
+
+        if (capturedPiece) {
+          state.capturedBy[movingPiece.color].push({ ...capturedPiece });
+        }
+
+        updateCastlingRights(movingPiece, capturedPiece, move);
+        applyMoveToBoard(state.board, move);
+
+        if (movingPiece.type === "p" || capturedPiece) {
+          state.halfmove = 0;
+        } else {
+          state.halfmove++;
+        }
+
+        if (move.special === "double-pawn") {
+          state.enPassant = {
+            r: (move.from.r + move.to.r) / 2,
+            c: move.from.c
+          };
+        } else {
+          state.enPassant = null;
+        }
+
+        state.lastMove = {
+          from: { ...move.from },
+          to: { ...move.to }
+        };
+
+        if (movingPiece.color === "b") {
+          state.fullmove++;
+        }
+
+        state.turn = opposite(state.turn);
+        const key = positionKey();
+        state.positionCounts[key] = (state.positionCounts[key] || 0) + 1;
+
+        evaluatePosition();
+
+        let suffix = "";
+        if (state.outcome === "checkmate") {
+          suffix = "#";
+        } else if (state.check) {
+          suffix = "+";
+        }
+
+        state.moves.push(baseNotation + suffix);
+        selectedSquare = null;
+        selectedMoves = [];
+        closePromotion();
+        render();
+      }
+
+      function showPromotion(moves) {
+        pendingPromotion = moves;
+        const movingPiece = state.board[moves[0].from.r][moves[0].from.c];
+        const color = movingPiece.color;
+
+        promotionTitle.textContent = `${colorName(color)} pawn promotion`;
+        promotionOptions.innerHTML = "";
+
+        for (const type of PROMOTIONS) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = `promotion-button ${color === "w" ? "white-piece" : "black-piece"}`;
+          button.dataset.promotion = type;
+          button.setAttribute("aria-label", `Promote to ${PIECE_NAMES[type]}`);
+          button.title = `Promote to ${PIECE_NAMES[type]}`;
+          button.textContent = SYMBOLS[color][type];
+          promotionOptions.appendChild(button);
+        }
+
+        promotionModal.hidden = false;
+        requestAnimationFrame(() => {
+          promotionOptions.querySelector("button")?.focus();
+        });
+      }
+
+      function closePromotion() {
+        pendingPromotion = null;
+        promotionModal.hidden = true;
+      }
+
+      function selectSquare(row, col) {
+        selectedSquare = { r: row, c: col };
+        selectedMoves = getLegalMoves(row, col);
+        renderBoard();
+      }
+
+      function handleSquareClick(row, col) {
+        if (state.gameOver || pendingPromotion) return;
+
+        const piece = state.board[row][col];
+
+        if (selectedSquare) {
+          const candidates = selectedMoves.filter(move =>
+            move.to.r === row && move.to.c === col
+          );
+
+          if (candidates.length) {
+            const promotionMoves = candidates.filter(move => move.promotion);
+            if (promotionMoves.length) {
+              showPromotion(promotionMoves);
+            } else {
+              executeMove(candidates[0]);
+            }
+            return;
+          }
+
+          if (
+            selectedSquare.r === row &&
+            selectedSquare.c === col
+          ) {
+            selectedSquare = null;
+            selectedMoves = [];
+            renderBoard();
+            return;
+          }
+        }
+
+        if (piece && piece.color === state.turn) {
+          selectSquare(row, col);
+        } else {
+          selectedSquare = null;
+          selectedMoves = [];
+          renderBoard();
+        }
+      }
+
+      function renderBoard() {
+        const fragment = document.createDocumentFragment();
+        const checkedKing = state.check ? findKing(state.board, state.turn) : null;
+
+        boardElement.innerHTML = "";
+
+        for (let row = 0; row < 8; row++) {
+          for (let col = 0; col < 8; col++) {
+            const piece = state.board[row][col];
+            const square = document.createElement("button");
+            const light = (row + col) % 2 === 0;
+            const legalMove = selectedMoves.find(move =>
+              move.to.r === row && move.to.c === col
+            );
+            const isSelected = selectedSquare &&
+              selectedSquare.r === row &&
+              selectedSquare.c === col;
+            const isLastMove = state.lastMove && (
+              (state.lastMove.from.r === row && state.lastMove.from.c === col) ||
+              (state.lastMove.to.r === row && state.lastMove.to.c === col)
+            );
+            const isCheckedKing = checkedKing &&
+              checkedKing.r === row &&
+              checkedKing.c === col;
+
+            square.type = "button";
+            square.className = `square ${light ? "light" : "dark"}`;
+            square.dataset.row = row;
+            square.dataset.col = col;
+            square.setAttribute("role", "gridcell");
+
+            if (isSelected) square.classList.add("selected");
+            if (isLastMove) square.classList.add("last-move");
+            if (isCheckedKing) square.classList.add("in-check");
+
+            if (legalMove) {
+              const isCapture = Boolean(state.board[row][col]) ||
+                legalMove.special === "en-passant";
+              square.classList.add("valid", isCapture ? "capture" : "empty");
+            }
+
+            let label = squareName(row, col);
+            if (piece) {
+              label += `, ${colorName(piece.color)} ${PIECE_NAMES[piece.type]}`;
+            } else {
+              label += ", empty";
+            }
+            if (legalMove) label += ", legal destination";
+            if (isSelected) label += ", selected";
+            if (isCheckedKing) label += ", in check";
+            square.setAttribute("aria-label", label);
+            square.setAttribute("aria-pressed", isSelected ? "true" : "false");
+
+            if (col === 0) {
+              const rank = document.createElement("span");
+              rank.className = "coordinate rank-label";
+              rank.textContent = 8 - row;
+              square.appendChild(rank);
+            }
+
+            if (row === 7) {
+              const file = document.createElement("span");
+              file.className = "coordinate file-label";
+              file.textContent = FILES[col];
+              square.appendChild(file);
+            }
+
+            if (piece) {
+              const pieceSpan = document.createElement("span");
+              pieceSpan.className = `piece ${piece.color === "w" ? "white-piece" : "black-piece"}`;
+              pieceSpan.setAttribute("aria-hidden", "true");
+              pieceSpan.textContent = SYMBOLS[piece.color][piece.type];
+              square.appendChild(pieceSpan);
+            }
+
+            fragment.appendChild(square);
+          }
+        }
+
+        boardElement.appendChild(fragment);
+      }
+
+      function renderStatus() {
+        const currentName = colorName(state.turn);
+        const currentKing = SYMBOLS[state.turn].k;
+
+        statusIcon.textContent = currentKing;
+        statusMessage.textContent = state.status;
+
+        statusDot.className = "status-dot";
+        if (state.gameOver) {
+          statusDot.classList.add("over");
+        } else if (state.check) {
+          statusDot.classList.add("check");
+        }
+
+        if (state.outcome === "checkmate") {
+          statusTitle.textContent = "Checkmate";
+        } else if (state.gameOver) {
+          statusTitle.textContent = "Game drawn";
+        } else if (state.check) {
+          statusTitle.textContent = `${currentName} to move · Check`;
+        } else {
+          statusTitle.textContent = `${currentName} to move`;
+        }
+
+        whitePlayer.classList.toggle("active", state.turn === "w" && !state.gameOver);
+        blackPlayer.classList.toggle("active", state.turn === "b" && !state.gameOver);
+        undoButton.disabled = state.undoStack.length === 0;
+      }
+
+      function renderCaptured() {
+        const order = { q: 0, r: 1, b: 2, n: 3, p: 4, k: 5 };
+        capturedContent.innerHTML = "";
+
+        for (const capturer of ["w", "b"]) {
+          const pieces = [...state.capturedBy[capturer]]
+            .sort((a, b) => order[a.type] - order[b.type]);
+          const points = pieces.reduce((total, piece) => total + VALUES[piece.type], 0);
+          const row = document.createElement("div");
+          row.className = "captured-row";
+
+          const meta = document.createElement("div");
+          meta.className = "captured-meta";
+          meta.innerHTML = `<span>${colorName(capturer)} captured</span><span>${points} pt${points === 1 ? "" : "s"}</span>`;
+          row.appendChild(meta);
+
+          const pieceContainer = document.createElement("div");
+          pieceContainer.className = "captured-pieces";
+
+          if (!pieces.length) {
+            const empty = document.createElement("span");
+            empty.className = "empty-captured";
+            empty.textContent = "No captures yet";
+            pieceContainer.appendChild(empty);
+          } else {
+            for (const piece of pieces) {
+              const span = document.createElement("span");
+              span.className = `captured-piece ${piece.color === "w" ? "white-piece" : "black-piece"}`;
+              span.title = `${colorName(piece.color)} ${PIECE_NAMES[piece.type]}`;
+              span.setAttribute("aria-label", span.title);
+              span.textContent = SYMBOLS[piece.color][piece.type];
+              pieceContainer.appendChild(span);
+            }
+          }
+
+          row.appendChild(pieceContainer);
+          capturedContent.appendChild(row);
+        }
+      }
+
+      function renderHistory() {
+        historyBody.innerHTML = "";
+        moveCount.textContent = `${state.moves.length} move${state.moves.length === 1 ? "" : "s"}`;
+
+        if (!state.moves.length) {
+          const row = document.createElement("tr");
+          const cell = document.createElement("td");
+          cell.colSpan = 3;
+          cell.className = "history-empty";
+          cell.textContent = "Moves will appear here";
+          row.appendChild(cell);
+          historyBody.appendChild(row);
+          return;
+        }
+
+        for (let index = 0; index < state.moves.length; index += 2) {
+          const row = document.createElement("tr");
+          const numberCell = document.createElement("td");
+          const whiteCell = document.createElement("td");
+          const blackCell = document.createElement("td");
+
+          numberCell.textContent = String(index / 2 + 1);
+          whiteCell.textContent = state.moves[index] || "";
+          blackCell.textContent = state.moves[index + 1] || "";
+
+          if (index === state.moves.length - 1) {
+            whiteCell.classList.add("latest");
+          }
+          if (index + 1 === state.moves.length - 1) {
+            blackCell.classList.add("latest");
+          }
+
+          row.append(numberCell, whiteCell, blackCell);
+          historyBody.appendChild(row);
+        }
+
+        requestAnimationFrame(() => {
+          historyScroll.scrollTop = historyScroll.scrollHeight;
+        });
+      }
+
+      function render() {
+        renderBoard();
+        renderStatus();
+        renderCaptured();
+        renderHistory();
+      }
+
+      boardElement.addEventListener("click", event => {
+        const square = event.target.closest(".square");
+        if (!square) return;
+        handleSquareClick(Number(square.dataset.row), Number(square.dataset.col));
+      });
+
+      promotionOptions.addEventListener("click", event => {
+        const button = event.target.closest("[data-promotion]");
+        if (!button || !pendingPromotion) return;
+
+        const move = pendingPromotion.find(
+          candidate => candidate.promotion === button.dataset.promotion
+        );
+
+        if (move) executeMove(move);
+      });
+
+      newGameButton.addEventListener("click", resetGame);
+      undoButton.addEventListener("click", undoMove);
+
+      document.addEventListener("keydown", event => {
+        if (event.key === "Escape") {
+          if (pendingPromotion) {
+            closePromotion();
+          } else if (selectedSquare) {
+            selectedSquare = null;
+            selectedMoves = [];
+            renderBoard();
+          }
+        }
+
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+          event.preventDefault();
+          undoMove();
+        }
+      });
+
+      resetGame();
+    })();
+  </script>
+</body>
+</html>

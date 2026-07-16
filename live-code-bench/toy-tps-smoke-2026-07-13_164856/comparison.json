@@ -1,0 +1,37 @@
+{
+  "method": "ratio_of_sums_output_tokens_over_provider_lifecycle_seconds",
+  "reasoning_effort": "high",
+  "runs_per_model": 1,
+  "rows": [
+    {
+      "model": "gpt-5.6-sol",
+      "passed": true,
+      "coverage": "complete",
+      "micro_sessions": 5,
+      "output_tokens": 654,
+      "inference_seconds": 18.850453,
+      "inference_output_tps": 34.69412644884449,
+      "tool_seconds": 2.864,
+      "inference_tool_overlap_seconds": 2.116463,
+      "wall_seconds": 25.5262220420409
+    },
+    {
+      "model": "gpt-5.6-sol-ultrafast",
+      "passed": true,
+      "coverage": "complete",
+      "micro_sessions": 5,
+      "output_tokens": 745,
+      "inference_seconds": 3.555506,
+      "inference_output_tps": 209.53417038249972,
+      "tool_seconds": 2.877,
+      "inference_tool_overlap_seconds": 1.986938,
+      "wall_seconds": 9.8443166250363
+    }
+  ],
+  "comparison": {
+    "ultrafast_minus_sol_tps": 174.84004393365524,
+    "ultrafast_over_sol": 6.039470994937772,
+    "ultrafast_percent_faster": 503.94709949377716
+  },
+  "output_root": "/Users/james/Library/Mobile Documents/com~apple~CloudDocs/Code/live-code-bench/LiveCodeBench/toy-tps-smoke-2026-07-13_164856"
+}

@@ -1,0 +1,45 @@
+{
+  "endpoints": [
+    {
+      "endpoint_name": "cerebras-glm-4.7",
+      "provider": "cerebras",
+      "model": "zai-glm-4.7",
+      "thinking_effort": "",
+      "attempted_runs": 2,
+      "completed_runs": 2,
+      "outcomes": {
+        "completed": 2
+      },
+      "billed_output_tokens": 17100,
+      "reasoning_tokens": 3736,
+      "inference_time_s": 25.814546,
+      "completed_inference_time_s": 25.814546,
+      "completed_active_generation_time_s": 24.252148,
+      "active_generation_billed_tokens": 17100,
+      "active_generation_eligible_runs": 2,
+      "incomplete_billed_output_tokens": 0,
+      "tool_time_s": 0.0,
+      "retry_api_time_s": 0.0,
+      "backoff_time_s": 0.0,
+      "harness_overhead_s": 6.019029,
+      "total_wall_s": 31.833575,
+      "planned_runs": 2,
+      "skipped_attempts_exhausted": 0,
+      "missing_runs": 0,
+      "visible_output_tokens": 13364,
+      "end_to_end_billed_tps": 662.4172278683499,
+      "active_generation_billed_tps": 705.0921839995369,
+      "averages_per_attempted_run": {
+        "billed_output_tokens": 8550.0,
+        "inference_time_s": 12.907273,
+        "tool_time_s": 0.0,
+        "retry_api_time_s": 0.0,
+        "backoff_time_s": 0.0,
+        "harness_overhead_s": 3.0095145,
+        "total_wall_s": 15.9167875,
+        "reasoning_tokens": 1868.0,
+        "visible_output_tokens": 6682.0
+      }
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+Looking at this problem:
+
+- **If A == B**: the path is forced: 1, 1+A, 1+2A, ..., so we need N ≡ 1 (mod A) and no bad interval contains a position ≡ 1 (mod A).
+- **If A < B**: reachable sets are unions of intervals. Within a free segment, the closure of an interval [l,r] under steps [A,B] is ∪ₖ [l+kA, r+kB], which merges into a single interval after at most ~A/(B-A) ≤ 19 generations. Jumps out of a segment only originate from its last B positions (targets ≤ e+B may skip several clustered bad intervals). Process segments left to right, distributing "entry" intervals forward.
+
+I verified this logic against all three samples (e.g. sample 1: closures {[1,1],[4,6]} → entry [9,11] → closure [9,16] → entry [21,21] → reaches 24 → Yes).
+
+```python
+import sys
+
+def main():
+    data = sys.stdin.buffer.read().split()
+    N = int(data[0]); M = int(data[1]); A = int(data[2]); B = int(data[3])
+    bads = []
+    idx = 4
+    for _ in range(M):
+        L = int(data[idx]); R = int(data[idx+1]); idx += 2
+        bads.append((L, R))
+    # merge adjacent bad intervals
+    merged = []
+    for L, R in bads:
+        if merged and L <= merged[-1][1] + 1:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], R))
+        else:
+            merged.append((L, R))
+    bads = merged
+
+    if A == B:
+        if (N - 1) % A != 0:
+            print("No"); return
+        for L, R in bads:
+            lo = (L - 1 + A - 1) // A
+            hi = (R - 1) // A
+            if lo <= hi:
+                print("No"); return
+        print("Yes"); return
+
+    # A < B
+    segs = []
+    prev = 1
+    for L, R in bads:
+        segs.append((prev, L - 1))
+        prev = R + 1
+    segs.append((prev, N))
+    ns = len(segs)
+    entries = [[] for _ in range(ns)]
+    entries[0].append((1, 1))
+
+    def merge_ints(ints):
+        ints.sort()
+        res = []
+        for l, r in ints:
+            if res and l <= res[-1][1] + 1:
+                if r > res[-1][1]:
+                    res[-1] = (res[-1][0], r)
+            else:
+                res.append((l, r))
+        return res
+
+    for i in range(ns):
+        s, e = segs[i]
+        E = merge_ints(entries[i])
+        if not E:
+            continue
+        clo = []
+        for l, r in E:
+            k = 0
+            while True:
+                cl = l + k * A
+                if cl > e:
+                    break
+                # once next generation overlaps, everything to e is reachable
+                if l + (k + 1) * A <= r + k * B + 1:
+                    clo.append((cl, e))
+                    break
+                clo.append((cl, min(r + k * B, e)))
+                k += 1
+        clo = merge_ints(clo)
+        if i == ns - 1:
+            for l, r in clo:
+                if l <= N <= r:
+                    print("Yes"); return
+            print("No"); return
+        # only last B positions can jump out of segment
+        wlo = max(s, e - B + 1)
+        targets = []
+        for l, r in clo:
+            p = max(l, wlo)
+            q = r
+            if p <= q:
+                a = p + A
+                b = min(q + B, N)
+                if a <= b:
+                    targets.append((a, b))
+        targets = merge_ints(targets)
+        j = i + 1
+        while j < ns and segs[j][0] <= e + B:
+            sj, ej = segs[j]
+            for a, b in targets:
+                aa = max(a, sj); bb = min(b, ej)
+                if aa <= bb:
+                    entries[j].append((aa, bb))
+            j += 1
+    print("No")
+
+main()
+```
+
+**Explanation of key points:**
+- Adjacent bad intervals are merged so all free segments are non-empty.
+- For A == B the path is completely determined, needing only modular checks.
+- For A < B, the closure loop terminates within ≤ ~20 iterations because the merge condition `l+(k+1)A ≤ r+kB+1` becomes true once `k(B-A) ≥ A-1-(r-l)`, after which all positions up to the segment end are reachable.
+- Jump targets from a segment end can land at most B beyond it, so only a few subsequent segments (each advancing by ≥ 2) can receive entries, keeping total work O(M · small constant).

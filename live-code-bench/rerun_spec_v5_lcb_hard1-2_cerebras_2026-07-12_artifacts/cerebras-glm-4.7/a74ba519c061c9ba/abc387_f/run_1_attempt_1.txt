@@ -1,0 +1,108 @@
+```python
+
+import sys
+
+sys.setrecursionlimit(10000)
+MOD = 998244353
+
+def main() -> None:
+    input = sys.stdin.readline
+    N, M = map(int, input().split())
+    A = [0] + list(map(int, input().split()))
+
+    # ----- Kosaraju -----
+    g = [[] for _ in range(N + 1)]
+    rg = [[] for _ in range(N + 1)]
+    for i in range(1, N + 1):
+        to = A[i]
+        g[i].append(to)
+        rg[to].append(i)
+
+    visited = [False] * (N + 1)
+    order = []
+
+    def dfs1(v: int) -> None:
+        visited[v] = True
+        for to in g[v]:
+            if not visited[to]:
+                dfs1(to)
+        order.append(v)
+
+    for i in range(1, N + 1):
+        if not visited[i]:
+            dfs1(i)
+
+    comp = [-1] * (N + 1)
+
+    def dfs2(v: int, cl: int) -> None:
+        comp[v] = cl
+        for to in rg[v]:
+            if comp[to] == -1:
+                dfs2(to, cl)
+
+    comp_id = 0
+    for v in reversed(order):
+        if comp[v] == -1:
+            dfs2(v, comp_id)
+            comp_id += 1
+
+    C = comp_id                     # number of SCCs
+
+    # ----- Build forest (children lists) -----
+    children = [[] for _ in range(C)]
+    has_out = [False] * C
+
+    for i in range(1, N + 1):
+        u = comp[i]
+        v = comp[A[i]]
+        if u != v:
+            children[v].append(u)   # u -> v, so v is parent
+            has_out[u] = True
+
+    roots = [v for v in range(C) if not has_out[v]]
+
+    # ----- DP on the tree -----
+    DP = [None] * C                 # DP[v][t] for t = 1..M
+
+    def compute(v: int) -> None:
+        # compute DP for the subtree rooted at v (v is a node in the condensation)
+        for child in children[v]:
+            compute(child)
+
+        if not children[v]:         # leaf
+            dp = [0] * (M + 1)
+            for t in range(1, M + 1):
+                dp[t] = 1
+            DP[v] = dp
+            return
+
+        # internal node: product over children of (prefix sums)
+        prod = [1] * (M + 1)
+        for child in children[v]:
+            child_dp = DP[child]
+            # prefix sums of child_dp
+            pref = [0] * (M + 1)
+            acc = 0
+            for t in range(1, M + 1):
+                acc = (acc + child_dp[t]) % MOD
+                pref[t] = acc
+            # multiply into prod
+            for t in range(1, M + 1):
+                prod[t] = (prod[t] * pref[t]) % MOD
+        DP[v] = prod
+
+    for r in roots:
+        compute(r)
+
+    # ----- Combine independent components -----
+    ans = 1
+    for r in roots:
+        total = sum(DP[r][1:]) % MOD
+        ans = (ans * total) % MOD
+
+    print(ans)
+
+if __name__ == "__main__":
+    main()
+
+```

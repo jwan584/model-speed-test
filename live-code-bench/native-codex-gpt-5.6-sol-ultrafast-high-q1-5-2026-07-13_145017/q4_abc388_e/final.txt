@@ -1,0 +1,9 @@
+Implemented [solution.py](/Users/james/Library/Mobile%20Documents/com~apple~CloudDocs/Code/live-code-bench/LiveCodeBench/native-codex-gpt-5.6-sol-ultrafast-high-q1-5-2026-07-13_145017/q4_abc388_e/solution.py).
+
+Validated with:
+
+- All three sample cases
+- Syntax compilation
+- 4,500 randomized cases against an exhaustive brute-force solver
+
+Complexity: \(O(N\log N)\) time and \(O(N)\) input storage.

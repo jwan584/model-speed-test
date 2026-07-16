@@ -1,0 +1,17 @@
+[
+  {
+    "id": "chess_game",
+    "prompt": "Build a polished, responsive local two-player chess game as one self-contained HTML file with inline CSS and JavaScript and no external dependencies; render a labeled board with standard starting pieces, enforce legal piece movement and turn order, show selected squares and valid moves, detect check and game-over states, include captured-piece and move-history panels plus New Game and Undo controls, and return only the complete HTML document.",
+    "required_patterns": ["<html", "<style", "<script", "chess|board", "undo", "new game"]
+  },
+  {
+    "id": "tetris_game",
+    "prompt": "Build a polished, responsive Tetris game as one self-contained HTML file with inline CSS and JavaScript and no external dependencies; support keyboard and touch controls, all seven tetrominoes, rotation and collision, line clearing, score and increasing levels, next-piece preview, pause, restart, game-over state, and concise control instructions, and return only the complete HTML document.",
+    "required_patterns": ["<html", "<style", "<script", "canvas", "score", "next", "pause", "restart"]
+  },
+  {
+    "id": "basic_web_crm",
+    "prompt": "Build a polished, responsive basic web CRM as one self-contained HTML file with inline CSS and JavaScript and no external dependencies; include a dashboard summary, searchable and filterable contacts or deals, pipeline stages, and working controls to add, edit, and delete records with browser localStorage persistence, seed it with realistic sample data, make empty states and validation clear, and return only the complete HTML document.",
+    "required_patterns": ["<html", "<style", "<script", "localStorage", "search", "add", "edit", "delete", "pipeline"]
+  }
+]

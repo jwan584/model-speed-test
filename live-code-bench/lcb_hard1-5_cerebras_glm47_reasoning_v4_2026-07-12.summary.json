@@ -1,0 +1,42 @@
+{
+  "endpoints": [
+    {
+      "endpoint_name": "cerebras_glm47",
+      "provider": "cerebras",
+      "model": "zai-glm-4.7",
+      "thinking_effort": "",
+      "attempted_runs": 5,
+      "completed_runs": 2,
+      "outcomes": {
+        "completed": 2,
+        "incomplete": 3
+      },
+      "billed_output_tokens": 51668,
+      "reasoning_tokens": 50868,
+      "inference_time_s": 364.55436699999996,
+      "completed_inference_time_s": 114.232558,
+      "incomplete_billed_output_tokens": 96000,
+      "tool_time_s": 0.0,
+      "retry_api_time_s": 0.0,
+      "backoff_time_s": 0.0,
+      "harness_overhead_s": 24.883468,
+      "total_wall_s": 389.43783499999995,
+      "planned_runs": 5,
+      "skipped_attempts_exhausted": 0,
+      "missing_runs": 3,
+      "visible_output_tokens": 800,
+      "billed_output_tokens_per_second": 452.30537514532415,
+      "averages_per_attempted_run": {
+        "billed_output_tokens": 10333.6,
+        "inference_time_s": 72.91087339999999,
+        "tool_time_s": 0.0,
+        "retry_api_time_s": 0.0,
+        "backoff_time_s": 0.0,
+        "harness_overhead_s": 4.9766936,
+        "total_wall_s": 77.88756699999999,
+        "reasoning_tokens": 10173.6,
+        "visible_output_tokens": 160.0
+      }
+    }
+  ]
+}

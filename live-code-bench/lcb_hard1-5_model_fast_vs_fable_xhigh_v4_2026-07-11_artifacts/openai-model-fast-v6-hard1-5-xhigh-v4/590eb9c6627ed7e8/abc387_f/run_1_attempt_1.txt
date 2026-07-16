@@ -1,0 +1,117 @@
+```python
+import sys
+from collections import deque
+from array import array
+
+MOD = 998244353
+
+
+def solve():
+    data = list(map(int, sys.stdin.buffer.read().split()))
+    n, m = data[0], data[1]
+    a = [x - 1 for x in data[2:]]
+
+    # Remove all non-cycle vertices from the functional graph.
+    indegree = [0] * n
+    for v in a:
+        indegree[v] += 1
+
+    queue = deque(i for i in range(n) if indegree[i] == 0)
+    while queue:
+        v = queue.popleft()
+        to = a[v]
+        indegree[to] -= 1
+        if indegree[to] == 0:
+            queue.append(to)
+
+    # Contract every directed cycle into one vertex.
+    uf = list(range(n))
+    size = [1] * n
+
+    def find(x):
+        while uf[x] != x:
+            uf[x] = uf[uf[x]]
+            x = uf[x]
+        return x
+
+    def union(x, y):
+        x = find(x)
+        y = find(y)
+        if x == y:
+            return
+        if size[x] < size[y]:
+            x, y = y, x
+        uf[y] = x
+        size[x] += size[y]
+
+    for i in range(n):
+        if indegree[i] > 0:
+            union(i, a[i])
+
+    component_id = {}
+    vertex_id = [0] * n
+    component_count = 0
+
+    for i in range(n):
+        root = find(i)
+        if root not in component_id:
+            component_id[root] = component_count
+            component_count += 1
+        vertex_id[i] = component_id[root]
+
+    # The contracted graph is a forest directed towards its roots.
+    parent = [-1] * component_count
+    children = [[] for _ in range(component_count)]
+
+    for i in range(n):
+        u = vertex_id[i]
+        v = vertex_id[a[i]]
+        if u != v:
+            parent[u] = v
+
+    roots = []
+    for v in range(component_count):
+        if parent[v] == -1:
+            roots.append(v)
+        else:
+            children[parent[v]].append(v)
+
+    # Obtain an order in which children can be processed before parents.
+    order = []
+    stack = roots[:]
+    while stack:
+        v = stack.pop()
+        order.append(v)
+        stack.extend(children[v])
+
+    dp = [None] * component_count
+    answer = 1
+
+    # dp[v][t] is the number of assignments in v's subtree
+    # when the value at v is exactly t + 1.
+    for v in reversed(order):
+        current = array('I', [1]) * m
+
+        for child in children[v]:
+            child_dp = dp[child]
+            prefix = 0
+
+            for value in range(m):
+                prefix += child_dp[value]
+                if prefix >= MOD:
+                    prefix -= MOD
+                current[value] = current[value] * prefix % MOD
+
+            dp[child] = None
+
+        if parent[v] == -1:
+            answer = answer * (sum(current) % MOD) % MOD
+        else:
+            dp[v] = current
+
+    print(answer)
+
+
+if __name__ == "__main__":
+    solve()
+```

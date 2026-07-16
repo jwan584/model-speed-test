@@ -1,0 +1,104 @@
+#!/bin/zsh
+set -u
+set -o pipefail
+
+SCRIPT_DIR=${0:A:h}
+CODEX_BIN=${CODEX_INSTRUMENTED_BIN:-"$SCRIPT_DIR/.codex-instrumented/codex-v0.144.3"}
+REASONING=${REASONING:-high}
+STAMP=$(date +%Y-%m-%d_%H%M%S)
+OUTPUT_ROOT=${1:-"$SCRIPT_DIR/toy-tps-smoke-$STAMP"}
+FIXTURE="$SCRIPT_DIR/fixtures/toy_add_two_tps_smoke.json"
+MODELS=(gpt-5.6-sol gpt-5.6-sol-ultrafast)
+
+if [[ ! -x "$CODEX_BIN" ]]; then
+  print -u2 "Instrumented Codex binary not found: $CODEX_BIN"
+  exit 1
+fi
+
+mkdir -p "$OUTPUT_ROOT"
+overall_status=0
+
+for model in $MODELS; do
+  output_dir="$OUTPUT_ROOT/$model"
+  mkdir -p "$output_dir"
+  print "[smoke] model=$model reasoning=$REASONING output=$output_dir"
+  "$SCRIPT_DIR/run_codex_native_benchmark" \
+    --codex-bin "$CODEX_BIN" \
+    --model "$model" \
+    --reasoning "$REASONING" \
+    --problem-fixture "$FIXTURE" \
+    --output-dir "$output_dir" \
+    2>&1 | tee "$output_dir/console.log"
+  run_status=$pipestatus[1]
+  if (( run_status != 0 )); then
+    overall_status=$run_status
+    print -u2 "[smoke] $model exited with status $run_status"
+  fi
+done
+
+"$SCRIPT_DIR/.venv/bin/python" - "$OUTPUT_ROOT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1]).resolve()
+models = ("gpt-5.6-sol", "gpt-5.6-sol-ultrafast")
+rows = []
+for model in models:
+    path = root / model / "summary.json"
+    if not path.exists():
+        rows.append({"model": model, "error": "summary_missing"})
+        continue
+    summary = json.loads(path.read_text())
+    run = summary["runs"][0]
+    timing = run["inference_calls"]
+    rows.append(
+        {
+            "model": model,
+            "passed": run.get("passed"),
+            "coverage": timing.get("primary_coverage"),
+            "micro_sessions": timing.get("primary_eligible_call_count"),
+            "output_tokens": timing.get("primary_output_tokens"),
+            "inference_seconds": timing.get(
+                "primary_provider_window_inference_seconds"
+            ),
+            "inference_output_tps": timing.get(
+                "primary_provider_window_output_tps"
+            ),
+            "tool_seconds": timing.get("total_tool_seconds"),
+            "inference_tool_overlap_seconds": timing.get(
+                "inference_tool_concurrency_seconds"
+            ),
+            "wall_seconds": run.get("agent_wall_s"),
+        }
+    )
+
+valid = {
+    row["model"]: row
+    for row in rows
+    if isinstance(row.get("inference_output_tps"), (int, float))
+}
+comparison = None
+if len(valid) == 2:
+    base = valid[models[0]]["inference_output_tps"]
+    fast = valid[models[1]]["inference_output_tps"]
+    comparison = {
+        "ultrafast_minus_sol_tps": fast - base,
+        "ultrafast_over_sol": fast / base if base else None,
+        "ultrafast_percent_faster": (fast / base - 1) * 100 if base else None,
+    }
+
+result = {
+    "method": "ratio_of_sums_output_tokens_over_provider_lifecycle_seconds",
+    "reasoning_effort": "high",
+    "runs_per_model": 1,
+    "rows": rows,
+    "comparison": comparison,
+    "output_root": str(root),
+}
+(root / "comparison.json").write_text(json.dumps(result, indent=2) + "\n")
+print(json.dumps(result, indent=2))
+PY
+
+print "[smoke] comparison=$OUTPUT_ROOT/comparison.json"
+exit $overall_status

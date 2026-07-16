@@ -1,0 +1,92 @@
+Looking at this problem:
+
+- A connected graph's BFS layering from vertex 1 (layers L₀={1}, L₁, ..., Lₜ) is characterized by: each vertex in Lᵢ has ≥1 neighbor in Lᵢ₋₁, no edges between layers ≥2 apart, edges within layers and extra edges between consecutive layers are free.
+- For layer sizes (1, s₁, ..., sₜ), the edge-count generating function is ∏ᵢ ((1+x)^{sᵢ₋₁}−1)^{sᵢ}·(1+x)^{C(sᵢ,2)}, and label choices give binomials.
+- DP over states (even-count e, odd-count o, last layer size j, last layer parity p), requiring finally e = o = N/2. Polynomials stored with implicit offset x^{n−1} (min edges). Convolutions done exactly mod P via 15-bit splitting + Karatsuba trick with numpy int64 convolve.
+
+Verified by hand on N=4 (gives 12 9 3 0) and structurally against N=10 sample (last nonzero M=41 with value 126 = C(9,5)·C(4,4) matches layers (1,5,4)).
+
+```python
+import sys
+import numpy as np
+
+def main():
+    data = sys.stdin.buffer.read().split()
+    N = int(data[0]); P = int(data[1])
+    half = N // 2
+    maxM = N * (N - 1) // 2
+    nrow = max(half * (half - 1) // 2, N) + 1
+    Cb = [[0]*(nrow+1) for _ in range(nrow+1)]
+    for i in range(nrow+1):
+        row = Cb[i]; row[0] = 1
+        if i:
+            prev = Cb[i-1]
+            for t in range(1, i+1):
+                row[t] = (prev[t-1] + prev[t]) % P
+    MASK = 32767
+    def convmod(a, b):
+        a0 = a & MASK; a1 = a >> 15
+        b0 = b & MASK; b1 = b >> 15
+        t0 = np.convolve(a0, b0)
+        t2 = np.convolve(a1, b1)
+        t1 = np.convolve(a0+a1, b0+b1) - t0 - t2
+        return (t0 % P + ((t1 % P) << 15) + ((t2 % P) << 30)) % P
+    Fp = {}
+    for j in range(1, half+1):
+        B = np.array(Cb[j][1:j+1], dtype=np.int64)
+        R = np.array([1], dtype=np.int64)
+        for k in range(1, half+1):
+            R = convmod(R, B)
+            m = k*(k-1)//2
+            Bin = np.array(Cb[m][:m+1], dtype=np.int64)
+            F = convmod(R, Bin)
+            Fp[(j,k)] = (F & MASK, F >> 15, (F & MASK)+(F >> 15))
+    layers = [dict() for _ in range(N+1)]
+    layers[1][(1,0,1,0)] = np.array([1], dtype=np.int64)
+    for n in range(1, N):
+        cur = layers[n]
+        if not cur: continue
+        rem = N - n
+        binrow = Cb[rem]
+        for (e,o,j,p), poly in cur.items():
+            if p == 0:
+                kmax = half - o; finish_only = (e == half)
+            else:
+                kmax = half - e; finish_only = (o == half)
+            if kmax <= 0: continue
+            a0 = poly & MASK; a1 = poly >> 15; aa = a0 + a1
+            ks = (kmax,) if finish_only else range(1, kmax+1)
+            for k in ks:
+                b0, b1, bb = Fp[(j,k)]
+                t0 = np.convolve(a0, b0)
+                t2 = np.convolve(a1, b1)
+                t1 = np.convolve(aa, bb) - t0 - t2
+                npoly = (t0 % P + ((t1 % P) << 15) + ((t2 % P) << 30)) % P
+                c = binrow[k]
+                if c != 1:
+                    npoly *= c; npoly %= P
+                if p == 0:
+                    key = (e, o+k, k, 1)
+                else:
+                    key = (e+k, o, k, 0)
+                tgt = layers[n+k]
+                old = tgt.get(key)
+                if old is None:
+                    tgt[key] = npoly
+                elif old.shape[0] >= npoly.shape[0]:
+                    old[:npoly.shape[0]] += npoly
+                    old %= P
+                else:
+                    npoly[:old.shape[0]] += old
+                    npoly %= P
+                    tgt[key] = npoly
+    L = maxM - (N-1) + 1
+    res = np.zeros(L, dtype=np.int64)
+    for key, poly in layers[N].items():
+        m = min(L, poly.shape[0])
+        res[:m] += poly[:m]
+        res %= P
+    sys.stdout.write(' '.join(map(str, res.tolist())) + '\n')
+
+main()
+```

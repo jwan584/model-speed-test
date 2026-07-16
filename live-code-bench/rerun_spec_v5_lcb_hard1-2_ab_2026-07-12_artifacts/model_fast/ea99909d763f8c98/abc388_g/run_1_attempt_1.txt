@@ -1,0 +1,74 @@
+```python
+import sys
+
+input = sys.stdin.buffer.readline
+
+N = int(input())
+A = []
+while len(A) < N:
+    A.extend(map(int, input().split()))
+
+# next_pos[i] is the first index p such that A[p] >= 2 * A[i].
+# C[i] = next_pos[i] - i.
+C = [0] * N
+p = 0
+
+for i in range(N):
+    if p <= i:
+        p = i + 1
+
+    target = 2 * A[i]
+    while p < N and A[p] < target:
+        p += 1
+
+    C[i] = p - i
+
+# Sparse table for range maximum queries on C.
+table = [C]
+max_query_length = N // 2
+
+while (1 << len(table)) <= max_query_length:
+    half = 1 << (len(table) - 1)
+    width = half << 1
+    previous = table[-1]
+    size = N - width + 1
+
+    current = [
+        previous[i] if previous[i] >= previous[i + half]
+        else previous[i + half]
+        for i in range(size)
+    ]
+    table.append(current)
+
+Q = int(input())
+answers = []
+
+for _ in range(Q):
+    L, R = map(int, input().split())
+    left = L - 1
+    length = R - L + 1
+
+    low = 0
+    high = length // 2 + 1
+
+    while high - low > 1:
+        k = (low + high) // 2
+
+        level = k.bit_length() - 1
+        block_size = 1 << level
+        row = table[level]
+
+        maximum = row[left]
+        other = row[left + k - block_size]
+        if other > maximum:
+            maximum = other
+
+        if maximum <= length - k:
+            low = k
+        else:
+            high = k
+
+    answers.append(str(low))
+
+sys.stdout.write("\n".join(answers))
+```

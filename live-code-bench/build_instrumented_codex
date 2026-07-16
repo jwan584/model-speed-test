@@ -1,0 +1,70 @@
+#!/bin/zsh
+set -euo pipefail
+
+SCRIPT_DIR=${0:A:h}
+CODEX_VERSION=0.144.3
+CODEX_TAG="rust-v${CODEX_VERSION}"
+INSTRUMENTATION_REVISION=client-timing-2
+INSTRUMENTATION_MARKER=codex_api::responses_websocket_lifecycle
+PATCH_FILE="$SCRIPT_DIR/instrumentation/codex-v${CODEX_VERSION}-websocket-timing.patch"
+BUILD_ROOT=${CODEX_INSTRUMENTED_BUILD_ROOT:-"${TMPDIR:-/tmp}/live-code-bench-codex-${CODEX_VERSION}-${INSTRUMENTATION_REVISION}"}
+SOURCE_DIR="$BUILD_ROOT/source"
+TARGET_DIR="$BUILD_ROOT/target"
+OUTPUT_DIR="$SCRIPT_DIR/.codex-instrumented"
+OUTPUT_BIN="$OUTPUT_DIR/codex-v${CODEX_VERSION}"
+OUTPUT_REVISION_FILE="$OUTPUT_BIN.instrumentation-revision"
+
+if [[ -x "$OUTPUT_BIN" ]] \
+  && "$OUTPUT_BIN" --version | grep -q "$CODEX_VERSION" \
+  && grep -aq "$INSTRUMENTATION_MARKER" "$OUTPUT_BIN" \
+  && [[ -f "$OUTPUT_REVISION_FILE" ]] \
+  && [[ "$(<"$OUTPUT_REVISION_FILE")" == "$INSTRUMENTATION_REVISION" ]]; then
+  print "$OUTPUT_BIN"
+  exit 0
+fi
+
+if ! command -v cargo >/dev/null 2>&1; then
+  print -u2 "Rust/Cargo is required to build the pinned instrumented Codex CLI."
+  if command -v brew >/dev/null 2>&1; then
+    print -u2 "Install it with: brew install rust"
+  else
+    print -u2 "Install Rust from: https://rustup.rs/"
+  fi
+  print -u2 "Then rerun: ./build_instrumented_codex"
+  exit 1
+fi
+
+mkdir -p "$BUILD_ROOT"
+if [[ ! -d "$SOURCE_DIR/.git" ]]; then
+  git clone --branch "$CODEX_TAG" --depth 1 https://github.com/openai/codex.git "$SOURCE_DIR"
+fi
+
+if ! git -C "$SOURCE_DIR" describe --tags --exact-match 2>/dev/null | grep -qx "$CODEX_TAG"; then
+  print -u2 "Existing source cache is not pinned to $CODEX_TAG: $SOURCE_DIR"
+  print -u2 "Choose a fresh CODEX_INSTRUMENTED_BUILD_ROOT and rerun."
+  exit 1
+fi
+
+if git -C "$SOURCE_DIR" apply --check "$PATCH_FILE" 2>/dev/null; then
+  git -C "$SOURCE_DIR" apply "$PATCH_FILE"
+elif git -C "$SOURCE_DIR" apply --reverse --check "$PATCH_FILE" 2>/dev/null; then
+  : # Patch was already applied by an earlier build attempt.
+else
+  print -u2 "The instrumentation patch neither applies cleanly nor appears applied."
+  exit 1
+fi
+
+CARGO_TARGET_DIR="$TARGET_DIR" cargo build \
+  --manifest-path "$SOURCE_DIR/codex-rs/Cargo.toml" \
+  --release -p codex-cli --bin codex
+
+if ! grep -aq "$INSTRUMENTATION_MARKER" "$TARGET_DIR/release/codex"; then
+  print -u2 "Built Codex binary is missing the lifecycle instrumentation marker."
+  exit 1
+fi
+
+mkdir -p "$OUTPUT_DIR"
+cp "$TARGET_DIR/release/codex" "$OUTPUT_BIN"
+chmod +x "$OUTPUT_BIN"
+print -r -- "$INSTRUMENTATION_REVISION" > "$OUTPUT_REVISION_FILE"
+print "$OUTPUT_BIN"

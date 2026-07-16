@@ -1,0 +1,2 @@
+problem_number,problem_id,model,reasoning_effort,passed,agent_wall_s,first_codex_item_s,output_tokens,reasoning_output_tokens,agent_end_to_end_output_tps,codex_reported_inference_output_tps,sse_event_window_output_tps_diagnostic,active_generation_output_tps,active_generation_eligibility,solution_path
+1,abc387_f,gpt-5.5-koffing-castor-kosmo-0527-test-ev3,xhigh,False,0.7634642909979448,,,,,,,,unavailable_until_reasoning_item_type_is_scrutable,native_codex_smoke_q1_2026-07-13/q1_abc387_f/solution.py

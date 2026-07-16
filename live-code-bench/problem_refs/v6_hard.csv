@@ -1,0 +1,81 @@
+index,question_id,difficulty,title
+1,abc387_f,hard,Count Arrays
+2,abc388_g,hard,Simultaneous Kagamimochi 2
+3,abc388_f,hard,Dangerous Sugoroku
+4,abc388_e,hard,Simultaneous Kagamimochi
+5,abc389_g,hard,Odd Even Graph
+6,abc389_f,hard,Rated Range
+7,abc389_e,hard,Square Price
+8,abc390_e,hard,Vitamin Balance
+9,abc390_g,hard,Permutation Concatenation
+10,abc390_f,hard,Double Sum 3
+11,abc391_f,hard,K
+12,abc391_e,hard,Hierarchical Majority Vote
+13,abc391_g,hard,Many LCS
+14,abc392_g,hard,Fine Triplets
+15,abc392_f,hard,Insert
+16,abc393_f,hard,Prefix LIS Query
+17,abc393_e,hard,GCD of Subset
+18,abc393_d,hard,Swap to Gather
+19,abc394_f,hard,Alkane
+20,abc394_g,hard,Dense Buildings
+21,abc394_e,hard,Palindromic Shortest Path
+22,abc395_f,hard,Smooth Occlusion
+23,abc395_e,hard,Flip Edge
+24,abc396_g,hard,Flip Row or Col
+25,abc396_f,hard,Rotated Inversions
+26,abc396_e,hard,Min of Restricted Sum
+27,abc397_d,hard,Cubes
+28,abc397_f,hard,Variety Split Hard
+29,abc397_g,hard,Maximize Distance
+30,abc397_e,hard,Path Decomposition of a Tree
+31,abc398_f,hard,ABCBA
+32,abc398_d,hard,Bonfire
+33,abc398_g,hard,Not Only Tree Game
+34,abc399_e,hard,Replace
+35,abc399_f,hard,Range Power Sum
+36,abc400_e,hard,Ringo's Favorite Numbers 3
+37,abc400_g,hard,Patisserie ABC 3
+38,arc190_c,hard,Basic Grid Problem with Updates
+39,arc190_a,hard,Inside or Outside
+40,arc190_d,hard,Matrix Pow Sum
+41,arc191_d,hard,Moving Pieces on Graph
+42,arc191_c,hard,A^n
+43,arc192_e,hard,Snuke's Kyoto Trip
+44,arc192_b,hard,Fennec VS. Snuke 2
+45,arc192_d,hard,Fraction Line
+46,arc193_b,hard,Broken Wheel
+47,arc193_a,hard,Complement Interval Graph
+48,arc193_d,hard,Magnets
+49,arc194_c,hard,Cost to Flip
+50,arc194_b,hard,Minimum Cost Sort
+51,arc194_e,hard,Swap 0^X and 1^Y
+52,arc194_d,hard,Reverse Brackets
+53,arc195_e,hard,Random Tree Distance
+54,arc195_b,hard,Uniform Sum
+55,arc195_c,hard,Hamiltonian Pieces
+56,arc195_d,hard,Swap and Erase
+57,arc196_b,hard,Torus Loop
+58,arc196_c,hard,Strongly Connected
+59,arc196_a,hard,Adjacent Delete
+60,arc196_d,hard,Roadway
+61,3674,hard,count-non-decreasing-subarrays-after-k-operations
+62,3725,hard,maximum-and-minimum-sums-of-at-most-size-k-subarrays
+63,3697,hard,minimum-increments-for-target-multiples-in-an-array
+64,3696,hard,count-substrings-divisible-by-last-digit
+65,3762,hard,maximize-the-minimum-game-score
+66,3733,hard,length-of-longest-v-shaped-diagonal-segment
+67,3781,hard,maximize-the-distance-between-points-on-a-square
+68,3770,hard,lexicographically-smallest-generated-string
+69,3789,hard,maximize-subarrays-after-removing-one-conflicting-pair
+70,3801,hard,count-beautiful-numbers
+71,3744,hard,minimum-operations-to-make-array-elements-zero
+72,3717,hard,minimum-operations-to-make-elements-within-k-subarrays-equal
+73,3777,hard,maximum-product-of-subsequences-with-an-alternating-sum-equal-to-k
+74,3687,hard,longest-special-path
+75,3739,hard,manhattan-distances-of-all-arrangements-of-pieces
+76,3701,hard,minimum-cost-good-caption
+77,3692,hard,shortest-matching-substring
+78,3783,hard,permutations-iv
+79,3784,hard,longest-common-prefix-of-k-strings-after-removal
+80,3765,hard,minimum-cost-to-divide-array-into-subarrays

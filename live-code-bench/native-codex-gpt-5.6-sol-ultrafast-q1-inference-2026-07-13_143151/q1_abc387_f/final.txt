@@ -1,0 +1,8 @@
+Implemented the complete \(O(NM)\) solution in [solution.py](/Users/james/Library/Mobile%20Documents/com~apple~CloudDocs/Code/live-code-bench/LiveCodeBench/native-codex-gpt-5.6-sol-ultrafast-q1-inference-2026-07-13_143151/q1_abc387_f/solution.py).
+
+Validated with:
+
+- All three samples
+- 300 randomized exhaustive comparisons
+- Maximum-size stress tests
+- Python syntax compilation check

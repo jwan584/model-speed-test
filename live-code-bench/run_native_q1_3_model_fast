@@ -1,0 +1,16 @@
+#!/bin/zsh
+set -euo pipefail
+SCRIPT_DIR=${0:A:h}
+# ChatGPT-managed native Codex cannot use the private API-only model_fast slug.
+# Override CODEX_NATIVE_MODEL only with another model available to Codex auth.
+MODEL=${CODEX_NATIVE_MODEL:-gpt-5.6-sol-ultrafast}
+print -u2 "Native Codex uses ChatGPT auth; running supported model: $MODEL"
+export LCB_DATASET_ARROW="$HOME/.cache/huggingface/datasets/json/default-018e03c0af9af2b6/0.0.0/f4e89e8750d5d5ffbef2c078bf0ddfedef29dc2faff52a6255cf513c05eb1092/json-train.arrow"
+export LCB_DATASET_ARROW_RELEASE=release_v6
+OUTPUT_DIR=${1:-"$SCRIPT_DIR/native-codex-${MODEL}-hard1-3-$(date +%Y-%m-%d_%H%M%S)"}
+exec "$SCRIPT_DIR/run_codex_native_benchmark" \
+  --model "$MODEL" \
+  --reasoning xhigh \
+  --problems hard:1 hard:2 hard:3 \
+  --release release_v6 \
+  --output-dir "$OUTPUT_DIR"

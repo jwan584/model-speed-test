@@ -1,0 +1,73 @@
+Looking at this problem:
+
+- For a sorted segment of size m, the maximum K is the largest K such that pairing the K smallest with the K largest (in order) works: `2*A[l+t] <= A[r-K+1+t]` for all t in [0, K-1], with K ≤ m//2.
+- Define `f(i)` = smallest index j with `A[j] >= 2*A[i]` (via two pointers since A is sorted), and `g(i) = f(i) - i`. The condition becomes `max(g[l..l+K-1]) <= m - K`, which is monotone in K (LHS non-decreasing, RHS decreasing), so we can binary search K per query using a sparse table for range max — O(1) per check.
+
+Verified against sample 1: e.g. query (1,11): g = [2,1,2,3,3,2,4,3,3,2,1], K=5 gives max g[0..4]=3 ≤ 11-5=6 ✓ → answer 5. All samples match.
+
+```python
+import sys
+
+def main():
+    data = sys.stdin.buffer.read().split()
+    n = int(data[0])
+    A = list(map(int, data[1:1+n]))
+    q = int(data[1+n])
+
+    # g[i] = (smallest j with A[j] >= 2*A[i]) - i ; j = n if none
+    g = [0]*n
+    j = 0
+    for i in range(n):
+        t = A[i] << 1
+        if j < i:
+            j = i
+        while j < n and A[j] < t:
+            j += 1
+        g[i] = j - i
+
+    # sparse table for range max on g
+    sp = [g]
+    k = 1
+    while (1 << k) <= n:
+        prev = sp[-1]
+        half = 1 << (k-1)
+        sp.append(list(map(max, prev, prev[half:])))
+        k += 1
+
+    logt = [0]*(n+1)
+    for i in range(2, n+1):
+        logt[i] = logt[i >> 1] + 1
+
+    out = []
+    ptr = 2 + n
+    for _ in range(q):
+        L = int(data[ptr]); R = int(data[ptr+1]); ptr += 2
+        l = L - 1
+        m = R - L + 1
+        lo = 0
+        hi = m >> 1
+        while lo < hi:
+            mid = (lo + hi + 1) >> 1
+            kk = logt[mid]
+            row = sp[kk]
+            a = row[l]
+            b = row[l + mid - (1 << kk)]
+            mx = a if a > b else b
+            if mx <= m - mid:
+                lo = mid
+            else:
+                hi = mid - 1
+        out.append(lo)
+
+    sys.stdout.write('\n'.join(map(str, out)) + '\n')
+
+main()
+```
+
+**Explanation of key steps:**
+
+1. **Greedy pairing lemma**: The maximum number of pairs in a sorted segment equals the largest K where the t-th smallest of the bottom K stacks onto the t-th smallest of the top K, i.e. `2*A[l+t] <= A[r-K+1+t]` for all t. If K works, K-1 also works (each top element is only larger), so binary search is valid.
+
+2. **Rewriting the condition**: With `f(i)` = first index whose value ≥ `2*A[i]`, the condition is `f(l+t) <= r-K+1+t`, i.e., `f(i) - i <= (r - l + 1) - K` for all i in `[l, l+K-1]`, i.e., `max g over [l, l+K-1] <= m - K`.
+
+3. **Sparse table** gives O(1) range max, and binary search over K ∈ [0, m//2] gives O(log N) per query — total O((N+Q) log N).

@@ -1,0 +1,86 @@
+Looking at this problem:
+
+- Each node `i` has an edge `i → A_i` with constraint `x_i ≤ x_{A_i}`. This is a functional graph: cycles with trees hanging off them.
+- On a cycle, the chain of inequalities forces all values on the cycle to be **equal**.
+- Contracting each cycle into a single node gives a forest where cycle-components are roots, and each tree node must have value ≤ its parent's value.
+- Tree DP: `f_v(t)` = number of ways for subtree of `v` given `x_v = t`. Then `f_v(t) = ∏_{child c} (Σ_{s≤t} f_c(s))` (prefix sums). Answer = product over roots of `Σ_t f_root(t)`.
+
+With N, M ≤ 2025, an O(N·M) DP works, and numpy makes prefix sums/multiplications fast (int64 is safe since MOD² < 2⁶³ and cumsum of ≤2025 values < MOD fits too).
+
+Verification on samples:
+- Sample 1: cycle {1,2} contracted, node 3 child → f_root(t)=t, sum = 1+2+3 = 6 ✓
+- Sample 2: root with 3 leaf children → Σ t³ for t=1..9 = 2025 ✓
+
+Cycle detection via Kahn's algorithm (repeatedly remove indegree-0 nodes; remaining nodes are exactly cycle nodes).
+
+```python
+import sys
+import numpy as np
+from collections import deque
+
+def main():
+    data = sys.stdin.read().split()
+    N = int(data[0]); M = int(data[1])
+    A = [int(x) - 1 for x in data[2:2 + N]]
+    MOD = 998244353
+
+    # Kahn's algorithm to find cycle nodes
+    indeg = [0] * N
+    for i in range(N):
+        indeg[A[i]] += 1
+    removed = [False] * N
+    q = deque(i for i in range(N) if indeg[i] == 0)
+    while q:
+        u = q.popleft()
+        removed[u] = True
+        v = A[u]
+        indeg[v] -= 1
+        if indeg[v] == 0:
+            q.append(v)
+
+    # assign component ids: each cycle -> one component
+    comp = [-1] * N
+    cid = 0
+    for i in range(N):
+        if not removed[i] and comp[i] == -1:
+            j = i
+            while comp[j] == -1:
+                comp[j] = cid
+                j = A[j]
+            cid += 1
+    num_cycle = cid
+    for i in range(N):
+        if removed[i]:
+            comp[i] = cid
+            cid += 1
+
+    # build forest: non-cycle node's parent is comp[A[i]]
+    children = [[] for _ in range(cid)]
+    for i in range(N):
+        if removed[i]:
+            children[comp[A[i]]].append(comp[i])
+
+    f = [None] * cid
+    ans = 1
+    for r in range(num_cycle):
+        stack = [(r, False)]
+        while stack:
+            node, done = stack.pop()
+            if not done:
+                stack.append((node, True))
+                for c in children[node]:
+                    stack.append((c, False))
+            else:
+                arr = np.ones(M, dtype=np.int64)
+                for c in children[node]:
+                    F = np.cumsum(f[c]) % MOD
+                    arr = arr * F % MOD
+                    f[c] = None  # free memory
+                f[node] = arr
+        ans = ans * (int(f[r].sum()) % MOD) % MOD
+        f[r] = None
+
+    print(ans % MOD)
+
+main()
+```

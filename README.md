@@ -2,6 +2,15 @@
 
 Reproducible harnesses for measuring model performance in coding-agent workflows.
 
+## LiveCodeBench
+
+The [`live-code-bench/`](live-code-bench/) directory contains the local
+LiveCodeBench harness, native Codex lifecycle instrumentation, reproducible
+benchmark launchers, tests, and recorded result artifacts. See its
+[`BENCHMARKING.md`](live-code-bench/BENCHMARKING.md) and
+[`NATIVE_CODEX_BENCHMARKING.md`](live-code-bench/NATIVE_CODEX_BENCHMARKING.md)
+for setup, accounting definitions, and run instructions.
+
 ## SWE-bench
 
 The [`swe-bench/`](swe-bench/) directory contains native Codex and Claude Code

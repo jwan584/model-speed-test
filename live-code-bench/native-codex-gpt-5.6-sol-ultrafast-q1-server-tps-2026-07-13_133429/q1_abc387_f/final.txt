@@ -1,0 +1,10 @@
+Implemented the complete solution in [solution.py](/Users/james/Library/Mobile%20Documents/com~apple~CloudDocs/Code/live-code-bench/LiveCodeBench/native-codex-gpt-5.6-sol-ultrafast-q1-server-tps-2026-07-13_133429/q1_abc387_f/solution.py).
+
+Validated with:
+
+- All provided samples
+- 250 randomized exhaustive brute-force checks
+- Maximum-size star, chain, binary-tree, and cycle cases
+- Python syntax compilation
+
+Complexity: `O(NM)` time and memory-efficient tree DP storage.

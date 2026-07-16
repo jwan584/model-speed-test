@@ -1,0 +1,132 @@
+```python
+import sys
+from collections import deque
+
+MOD = 998244353
+
+
+def solve():
+    input = sys.stdin.readline
+    N, M = map(int, input().split())
+    A = [x - 1 for x in map(int, input().split())]
+
+    # Remove all non-cycle vertices from the functional graph.
+    indegree = [0] * N
+    for p in A:
+        indegree[p] += 1
+
+    queue = deque(i for i in range(N) if indegree[i] == 0)
+    removed = [False] * N
+
+    while queue:
+        v = queue.popleft()
+        removed[v] = True
+        p = A[v]
+        indegree[p] -= 1
+        if indegree[p] == 0:
+            queue.append(p)
+
+    # Give every non-cycle vertex its own contracted ID.
+    # All vertices of the same cycle receive one shared ID.
+    node_id = [-1] * N
+    contracted_count = 0
+
+    for v in range(N):
+        if removed[v]:
+            node_id[v] = contracted_count
+            contracted_count += 1
+
+    roots = []
+    for start in range(N):
+        if not removed[start] and node_id[start] == -1:
+            root_id = contracted_count
+            contracted_count += 1
+            roots.append(root_id)
+
+            v = start
+            while node_id[v] == -1:
+                node_id[v] = root_id
+                v = A[v]
+
+    # The contracted graph is a forest directed toward the cycle roots.
+    children = [[] for _ in range(contracted_count)]
+    for v in range(N):
+        if removed[v]:
+            children[node_id[A[v]]].append(node_id[v])
+
+    # Put the largest subtree first. Its DP array can then be reused,
+    # keeping the peak memory usage small.
+    order = []
+    stack = roots[:]
+    while stack:
+        v = stack.pop()
+        order.append(v)
+        stack.extend(children[v])
+
+    subtree_size = [1] * contracted_count
+    for v in reversed(order):
+        if not children[v]:
+            continue
+
+        total = 1
+        largest_index = 0
+        largest_size = -1
+
+        for i, child in enumerate(children[v]):
+            size = subtree_size[child]
+            total += size
+            if size > largest_size:
+                largest_size = size
+                largest_index = i
+
+        subtree_size[v] = total
+        children[v][0], children[v][largest_index] = (
+            children[v][largest_index],
+            children[v][0],
+        )
+
+    sys.setrecursionlimit(N * 3 + 100)
+
+    def tree_dp(v):
+        """
+        Returns dp[j]: the number of assignments in v's subtree when
+        v has value j + 1.
+        """
+        if not children[v]:
+            return [1] * M
+
+        # Reuse the first child's array.
+        dp = tree_dp(children[v][0])
+        prefix = 0
+        for j in range(M):
+            prefix += dp[j]
+            if prefix >= MOD:
+                prefix -= MOD
+            dp[j] = prefix
+
+        for index in range(1, len(children[v])):
+            child_dp = tree_dp(children[v][index])
+            prefix = 0
+
+            for j in range(M):
+                prefix += child_dp[j]
+                if prefix >= MOD:
+                    prefix -= MOD
+                dp[j] = dp[j] * prefix % MOD
+
+            del child_dp
+
+        return dp
+
+    answer = 1
+    for root in roots:
+        root_dp = tree_dp(root)
+        answer = answer * (sum(root_dp) % MOD) % MOD
+        del root_dp
+
+    print(answer)
+
+
+if __name__ == "__main__":
+    solve()
+```

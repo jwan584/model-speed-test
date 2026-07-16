@@ -1,0 +1,69 @@
+```python
+import sys
+
+
+def solve() -> None:
+    input = sys.stdin.readline
+    N, M, A, B = map(int, input().split())
+    intervals = [tuple(map(int, input().split())) for _ in range(M)]
+
+    full_mask = (1 << B) - 1
+    jump_mask = ((1 << (B - A + 1)) - 1) << (A - 1)
+
+    def apply_transition(state: int, transition: list[int]) -> int:
+        result = 0
+        while state:
+            lowest_bit = state & -state
+            index = lowest_bit.bit_length() - 1
+            result |= transition[index]
+            state ^= lowest_bit
+        return result
+
+    # powers[k] represents the transition over 2^k consecutive good squares.
+    base_transition = []
+    for index in range(B):
+        state = 1 << index
+        shifted = (state << 1) & full_mask
+        new_reachable = 1 if state & jump_mask else 0
+        base_transition.append(shifted | new_reachable)
+
+    powers = [base_transition]
+    for _ in range(1, N.bit_length()):
+        previous = powers[-1]
+        squared = [
+            apply_transition(image, previous)
+            for image in previous
+        ]
+        powers.append(squared)
+
+    def advance_good(state: int, length: int) -> int:
+        bit = 0
+        while length:
+            if length & 1:
+                state = apply_transition(state, powers[bit])
+            length >>= 1
+            bit += 1
+        return state
+
+    # Bit d indicates whether (current position - d) is reachable.
+    state = 1  # Square 1 is reachable.
+    current = 1
+
+    for left, right in intervals:
+        state = advance_good(state, left - current - 1)
+
+        bad_length = right - left + 1
+        if bad_length >= B:
+            state = 0
+        else:
+            state = (state << bad_length) & full_mask
+
+        current = right
+
+    state = advance_good(state, N - current)
+    print("Yes" if state & 1 else "No")
+
+
+if __name__ == "__main__":
+    solve()
+```

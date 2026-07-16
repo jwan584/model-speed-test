@@ -1,0 +1,19 @@
+#!/bin/zsh
+set -euo pipefail
+
+SCRIPT_DIR=${0:A:h}
+CODEX_BIN=${CODEX_INSTRUMENTED_BIN:-"$SCRIPT_DIR/.codex-instrumented/codex-v0.144.3"}
+MODEL=${CODEX_NATIVE_MODEL:-gpt-5.6-sol-ultrafast}
+OUTPUT_DIR=${1:-"$SCRIPT_DIR/native-codex-${MODEL}-q1-inference-$(date +%Y-%m-%d_%H%M%S)"}
+
+if [[ ! -x "$CODEX_BIN" ]]; then
+  "$SCRIPT_DIR/build_instrumented_codex"
+fi
+
+exec "$SCRIPT_DIR/run_codex_native_benchmark" \
+  --codex-bin "$CODEX_BIN" \
+  --model "$MODEL" \
+  --reasoning xhigh \
+  --problem-fixture "$SCRIPT_DIR/fixtures/lcb_release_v6_q1_abc387_f.json" \
+  --release release_v6 \
+  --output-dir "$OUTPUT_DIR"
