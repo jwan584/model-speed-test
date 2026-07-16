@@ -1,0 +1,101 @@
+# GDPval paper appendix A.6.4. Versions are relaxed where the published
+# production pin has no Ubuntu 22.04/Python 3.10 wheel.
+jupyterlab==4.1.8
+aiohttp==3.9.5
+notebook==6.5.1
+tqdm==4.64.0
+matplotlib==3.6.3
+matplotlib-venn==0.11.6
+# 1.23.5 is the newest release retaining aliases required by the appendix's
+# librosa 0.8.1 pin; 1.24 makes that package fail at import time.
+numpy==1.23.5
+numpy-financial==1.0.0
+scipy==1.14.1
+pandas==1.5.3
+statsmodels==0.13.5
+sympy==1.13.1
+seaborn==0.11.2
+scikit-learn==1.1.3
+nltk==3.9.1
+plotnine==0.10.1
+shapely==1.7.1
+fiona==1.9.2; platform_machine != "aarch64"
+geopandas==0.10.2
+ffmpeg-python==0.2.0
+pydub==0.25.1
+moviepy==1.0.3
+opencv-python==4.5.5.62
+Pillow==9.1.0
+python-docx==0.8.11
+python-pptx==0.6.21
+openpyxl==3.0.10
+geopy==2.2.0
+scikit-image==0.20.0
+folium==0.12.1
+wordcloud==1.9.2
+faker==8.13.2
+fpdf2==2.8.3
+soundfile==0.10.2
+pdfkit==0.6.1
+pycountry==20.7.3
+tabulate==0.9.0
+pytesseract==0.3.8
+qrcode==7.3
+networkx==2.8.8
+docx2txt==0.8
+PyMuPDF==1.21.1
+pdf2image==1.16.3
+h5py==3.8.0
+tables==3.8.0
+rarfile==4.0
+odfpy==1.4.1
+pyxlsb==1.0.8
+xgboost==1.4.2
+plotly==5.3.0
+graphviz==0.17
+fuzzywuzzy==0.18.0
+pydot==1.4.2
+pypandoc==1.6.3
+reportlab==3.6.12
+mutagen==1.45.1
+librosa==0.8.1
+svglib==1.1.0
+textblob==0.15.3
+rasterio==1.3.3
+rdflib==6.0.0
+rdkit==2024.9.6; platform_machine != "aarch64"
+# Latest appendix pin without an arm64 wheel; this is the nearest native build.
+rdkit==2024.3.2; platform_machine == "aarch64"
+biopython==1.84
+cairosvg==2.5.2
+markdownify==0.9.3
+anytree==2.8.0
+pdfplumber==0.6.2
+trimesh==3.9.29
+svgwrite==1.4.1
+pdfrw==0.4
+pyzbar==0.1.8
+imgkit==1.2.2
+chardet==3.0.4
+bokeh==2.4.0
+camelot-py==0.10.1
+exchange_calendars==3.4
+weasyprint==53.3
+pronouncing==0.2.0
+spacy==3.4.4
+requests==2.31.0
+mne==0.23.4
+catboost==1.2.7
+lightgbm==4.5.0
+imbalanced-learn==0.12.3
+rapidfuzz==3.10.1
+# These upstream wheels are x86_64-only. Native arm64 benchmarks explicitly
+# report the missing capabilities in image-healthcheck instead of using QEMU.
+aspose-words==25.8.0; platform_machine != "aarch64"
+av==11.0.0
+cadquery==2.4.0; platform_machine != "aarch64"
+cadquery-ocp==7.7.0; platform_machine != "aarch64"
+pedalboard==0.9.9
+pyloudnorm==0.1.1
+srt==3.5.3
+xlrd==2.0.1

@@ -1,0 +1,30 @@
+run:
+  output_dir: runs/smoke-final
+  dataset_cache: data/gdpval
+  max_turns: 30
+  task_timeout_seconds: 900
+  tool_timeout_seconds: 120
+  warmup: true
+  resume: false
+  concurrency: 1
+  task_ids: [854f3814-681c-4950-91ac-55b0db0e3781]
+  offset: 0
+  limit: 1
+  region: us-west
+sandbox:
+  backend: local
+  image: null
+  allow_local: true
+tools:
+  web_search: {provider: brave, api_key_env: BRAVE_API_KEY}
+  web_fetch: {max_bytes: 50000}
+providers:
+  anthropic:
+    enabled: true
+    model: claude-opus-4-8
+    api_key_env: ANTHROPIC_API_KEY
+    endpoint: https://api.anthropic.com/v1/messages
+    max_output_tokens: 8000
+    max_retries: 3
+  openai: {enabled: false}
+  google: {enabled: false}

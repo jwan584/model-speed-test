@@ -1,0 +1,36 @@
+name: gdp-10
+description: Ten-task GDPval mini set selected for artifact and occupation diversity.
+selection_note: >-
+  Selected from user choices 1, 2, 5, 6, 11, 12, 14, 16, 17, 19, and 20.
+  Task 12 was omitted because its PDF case-synthesis workflow overlaps tasks 1 and 5.
+tasks:
+  - order: 1
+    task_id: 43dc9778-450b-4b46-b77e-b6d82b202035
+    label: 2024 individual Form 1040 return
+  - order: 2
+    task_id: 4b894ae3-1f23-4560-b13d-07ed1132074e
+    label: Bass repair and multitrack audio remix
+  - order: 3
+    task_id: 90edba97-74f0-425a-8ff6-8b93182eb7cb
+    label: Dialysis annual laboratory and treatment tracker
+  - order: 4
+    task_id: f2986c1f-2bbf-4b83-bc93-624a9d617f45
+    label: Photograph-based medication identification workbook
+  - order: 5
+    task_id: 83d10b06-26d1-4636-a32c-23f92c57f30b
+    label: Anti-financial-crime audit sampling workbook
+  - order: 6
+    task_id: 2ea2e5b5-257f-42e6-a7dc-93763f28b19d
+    label: Enterprise work-time analysis presentation
+  - order: 7
+    task_id: 87da214f-fd92-4c58-9854-f4d0d10adce0
+    label: Identity-theft reimbursement audit presentation
+  - order: 8
+    task_id: 11593a50-734d-4449-b5b4-f8986a133fd8
+    label: Home-showing comparison and map package
+  - order: 9
+    task_id: bb863dd9-31c2-4f64-911a-ce11f457143b
+    label: Emergency-health-kit quotation workbook
+  - order: 10
+    task_id: 854f3814-681c-4950-91ac-55b0db0e3781
+    label: I-40 OverpassQL freight-routing dataset instructions

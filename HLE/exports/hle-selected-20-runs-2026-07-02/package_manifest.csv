@@ -1,0 +1,5 @@
+filename,description,row_count,size_bytes,sha256
+runs_detailed.csv,Joined run-level export,20,60274,fb9c7eefc8839a0141b43cd6eb7ff148a8eba42bdb6ab3f2858b3e9d0813fa23
+questions.csv,Selected question and reference-answer manifest,20,19791,fcd5a3aca60212d1bbcebc63470aac98bb004bfef1c2e89c770d31acc558ad1d
+summary.csv,Aggregate results by selected batch,2,800,67c9e161b11ccb8bee54ac169812d145ae1febd8ddeb4d32472ad371a686e80a
+README.md,"Scope, provenance, and field definitions",,1580,34720c75a1c2aa36041d69234afe3175a1652e34c19cc182f2661eda7a4014a6

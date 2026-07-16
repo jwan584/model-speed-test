@@ -1,0 +1,58 @@
+run:
+  output_dir: runs/gdp-10-task1-3x
+  dataset_cache: data/gdpval
+  max_turns: 30
+  task_timeout_seconds: 7200
+  tool_timeout_seconds: 900
+  warmup: true
+  resume: true
+  repetitions: 3
+  economy:
+    enabled: true
+    force_finalize_turn: 20
+    stop_empty_output_turn: 24
+    max_consecutive_no_tool_turns: 3
+    skip_repetitions_after_structural_failures: 2
+  concurrency: 1
+  required_reasoning_effort: xhigh
+  task_ids: [43dc9778-450b-4b46-b77e-b6d82b202035]
+  offset: 0
+  limit: 1
+  region: us-west
+sandbox:
+  backend: local
+  image: null
+  allow_local: true
+tools:
+  web_search: {provider: brave, api_key_env: BRAVE_API_KEY}
+  web_fetch: {max_bytes: 50000}
+providers:
+  opus_xhigh:
+    type: anthropic
+    enabled: true
+    model: claude-opus-4-8
+    api_key_env: ANTHROPIC_API_KEY
+    endpoint: https://api.anthropic.com/v1/messages
+    reasoning_effort: xhigh
+    adaptive_thinking: true
+    max_output_tokens: 64000
+    max_retries: 5
+  fable_xhigh:
+    type: anthropic
+    enabled: true
+    model: claude-fable-5
+    api_key_env: ANTHROPIC_API_KEY
+    endpoint: https://api.anthropic.com/v1/messages
+    reasoning_effort: xhigh
+    adaptive_thinking: true
+    max_output_tokens: 64000
+    max_retries: 5
+  model_fast_xhigh:
+    type: openai
+    enabled: true
+    model: gpt-5.5-koffing-castor-kosmo-0527-test-ev3
+    api_key_env: OPENAI_API_KEY
+    endpoint: https://api.openai.com/v1/responses
+    reasoning_effort: xhigh
+    max_output_tokens: 64000
+    max_retries: 5

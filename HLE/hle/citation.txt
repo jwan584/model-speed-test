@@ -1,0 +1,13 @@
+@article{phan2025lastexam,
+      title = {A benchmark of expert-level academic questions to assess {AI} capabilities},
+      author = {{Center for AI Safety} and {Scale AI} and {HLE Contributors Consortium}},
+      journal = {Nature},
+      volume = {649},
+      pages = {1139--1146},
+      year = {2026},
+      doi = {10.1038/s41586-025-09962-4},
+      eprint = {2501.14249},
+      archivePrefix = {arXiv},
+      primaryClass = {cs.LG},
+      url = {https://arxiv.org/abs/2501.14249}
+}

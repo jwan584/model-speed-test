@@ -1,0 +1,50 @@
+run:
+  output_dir: runs
+  dataset_cache: data/gdpval
+  max_turns: 30
+  task_timeout_seconds: 7200
+  tool_timeout_seconds: 900
+  warmup: true
+  resume: true
+  concurrency: 1
+  required_reasoning_effort: xhigh
+  task_ids: []
+  offset: 0
+  limit: 1
+  region: us-west
+sandbox:
+  backend: docker
+  image: gdpval-timing:latest
+  network: bridge
+  memory: 8g
+  cpus: 4
+  allow_local: false
+tools:
+  web_search: {provider: brave, api_key_env: BRAVE_API_KEY}
+  web_fetch: {max_bytes: 50000}
+providers:
+  anthropic:
+    enabled: true
+    model: claude-opus-4-8
+    api_key_env: ANTHROPIC_API_KEY
+    endpoint: https://api.anthropic.com/v1/messages
+    reasoning_effort: xhigh
+    adaptive_thinking: true
+    max_output_tokens: 32000
+    max_retries: 5
+  openai:
+    enabled: false
+    model: gpt-5.5
+    api_key_env: OPENAI_API_KEY
+    endpoint: https://api.openai.com/v1/responses
+    reasoning_effort: xhigh
+    max_output_tokens: 32000
+    max_retries: 5
+  google:
+    enabled: false
+    model: gemini-3.1-pro
+    api_key_env: GEMINI_API_KEY
+    endpoint: https://generativelanguage.googleapis.com/v1beta
+    max_output_tokens: 32000
+    temperature: 0
+    max_retries: 5

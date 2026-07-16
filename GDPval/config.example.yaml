@@ -1,0 +1,84 @@
+run:
+  output_dir: runs
+  dataset_cache: data/gdpval
+  max_turns: 30
+  task_timeout_seconds: 7200
+  tool_timeout_seconds: 900
+  warmup: true
+  resume: true
+  # Independent serial samples per provider/task, each with its own workspace.
+  repetitions: 1
+  economy:
+    enabled: true
+    force_finalize_turn: 20
+    finalize_grace_turns: 3
+    stop_empty_output_turn: 24
+    max_consecutive_no_tool_turns: 3
+    max_no_progress_turns: 5
+    progress_tracking_start_turn: 12
+    max_consecutive_tool_failures: 5
+    repeated_error_warning_threshold: 3
+    skip_repetitions_after_structural_failures: 2
+  context:
+    retain_recent_tool_turns: 8
+    max_historical_tool_result_chars: 4000
+    image_payload_retention_turns: 1
+  # Serial is mandatory for benchmark runs.
+  concurrency: 1
+  # Fail closed if any enabled provider is not explicitly configured at xhigh.
+  required_reasoning_effort: xhigh
+  task_ids: []
+  offset: 0
+  limit: 1
+  region: us-west
+
+sandbox:
+  backend: docker
+  image: gdpval-timing:latest
+  network: bridge
+  memory: 8g
+  # Keep swap equal to memory so host pressure cannot silently distort tool timing.
+  memory_swap: 8g
+  cpus: 4
+  pids_limit: 512
+  require_native_arch: true
+  preflight_timeout_seconds: 120
+  healthcheck_command: gdpval-image-healthcheck
+  # Run as the invoking uid/gid so bind-mounted deliverables stay writable.
+  user: host
+  # Development-only escape hatch; benchmark records visibly flag it.
+  allow_local: false
+
+tools:
+  web_search:
+    provider: brave
+    api_key_env: BRAVE_API_KEY
+  web_fetch:
+    max_bytes: 50000
+
+providers:
+  anthropic:
+    enabled: true
+    model: claude-opus-4-1
+    api_key_env: ANTHROPIC_API_KEY
+    endpoint: https://api.anthropic.com/v1/messages
+    reasoning_effort: xhigh
+    adaptive_thinking: true
+    max_output_tokens: 32000
+    max_retries: 5
+  openai:
+    enabled: false
+    model: gpt-5
+    api_key_env: OPENAI_API_KEY
+    endpoint: https://api.openai.com/v1/responses
+    reasoning_effort: xhigh
+    max_output_tokens: 32000
+    max_retries: 5
+  google:
+    enabled: false
+    model: gemini-2.5-pro
+    api_key_env: GEMINI_API_KEY
+    endpoint: https://generativelanguage.googleapis.com/v1beta
+    max_output_tokens: 32000
+    temperature: 0
+    max_retries: 5

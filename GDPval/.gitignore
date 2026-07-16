@@ -1,0 +1,10 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.hf-cache/
+.docker-config/
+data/
+runs/
+*.egg-info/

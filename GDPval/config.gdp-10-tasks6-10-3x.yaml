@@ -1,0 +1,68 @@
+run:
+  output_dir: runs/gdp-10-tasks6-10-fable-fast-3x
+  dataset_cache: data/gdpval
+  max_turns: 30
+  task_timeout_seconds: 7200
+  tool_timeout_seconds: 900
+  warmup: true
+  resume: true
+  repetitions: 3
+  economy:
+    enabled: true
+    force_finalize_turn: 20
+    finalize_grace_turns: 3
+    stop_empty_output_turn: 24
+    max_consecutive_no_tool_turns: 3
+    max_no_progress_turns: 5
+    progress_tracking_start_turn: 12
+    max_consecutive_tool_failures: 5
+    repeated_error_warning_threshold: 3
+    skip_repetitions_after_structural_failures: 2
+  context:
+    retain_recent_tool_turns: 8
+    max_historical_tool_result_chars: 4000
+    image_payload_retention_turns: 1
+  concurrency: 1
+  required_reasoning_effort: xhigh
+  task_ids:
+    - 2ea2e5b5-257f-42e6-a7dc-93763f28b19d
+    - 87da214f-fd92-4c58-9854-f4d0d10adce0
+    - 11593a50-734d-4449-b5b4-f8986a133fd8
+    - bb863dd9-31c2-4f64-911a-ce11f457143b
+    - 854f3814-681c-4950-91ac-55b0db0e3781
+  region: us-west
+sandbox:
+  backend: docker
+  image: gdpval-timing:latest
+  network: bridge
+  memory: 4g
+  cpus: 2
+  require_native_arch: true
+  allow_local: false
+tools:
+  web_search: {provider: brave, api_key_env: BRAVE_API_KEY}
+  web_fetch: {max_bytes: 50000}
+providers:
+  fable_xhigh:
+    type: anthropic
+    enabled: true
+    model: claude-fable-5
+    api_key_env: ANTHROPIC_API_KEY
+    endpoint: https://api.anthropic.com/v1/messages
+    reasoning_effort: xhigh
+    adaptive_thinking: true
+    max_output_tokens: 64000
+    max_retries: 5
+    inference_idle_timeout_seconds: 300
+    inference_absolute_timeout_seconds: 1800
+  model_fast_xhigh:
+    type: openai
+    enabled: true
+    model: gpt-5.5-koffing-castor-kosmo-0527-test-ev3
+    api_key_env: OPENAI_API_KEY
+    endpoint: https://api.openai.com/v1/responses
+    reasoning_effort: xhigh
+    max_output_tokens: 64000
+    max_retries: 5
+    inference_idle_timeout_seconds: 300
+    inference_absolute_timeout_seconds: 1800

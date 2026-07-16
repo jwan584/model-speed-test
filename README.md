@@ -11,6 +11,21 @@ benchmark launchers, tests, and recorded result artifacts. See its
 [`NATIVE_CODEX_BENCHMARKING.md`](live-code-bench/NATIVE_CODEX_BENCHMARKING.md)
 for setup, accounting definitions, and run instructions.
 
+## GDPval
+
+The [`GDPval/`](GDPval/) directory contains the GDPval timing harness,
+provider adapters, Docker setup, benchmark configurations, and tests. Datasets,
+run outputs, local environments, and provider caches are downloaded or created
+at runtime and are intentionally not versioned.
+
+## HLE
+
+The [`HLE/`](HLE/) directory contains the Humanity's Last Exam timing harness,
+pinned benchmark manifests, tests, documentation, and compact result artifacts.
+The HLE dataset and tokenizer assets are downloaded into a local cache on first
+use; environments, caches, credentials, logs, and machine state are not
+versioned.
+
 ## SWE-bench
 
 The [`swe-bench/`](swe-bench/) directory contains native Codex and Claude Code
